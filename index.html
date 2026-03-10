@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>车载中音单元逆向分析 V27.0 (逻辑自洽版)</title>
-    <!-- 引入截图功能库 -->
+    <title>车载中音单元逆向分析 V31.0 (综合进化版)</title>
+    <!-- 引入截图功能库与图表库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         :root { 
             --safe: #27ae60; 
             --warn: #f39c12; 
             --danger: #c0392b; 
             --neutral: #2980b9; 
-            --info: #8e44ad; /* 新增一种中性偏冷的颜色 */
+            --info: #8e44ad;
             --card-bg: #2c3e50;
             --panel-bg: #34495e;
             --text: #ecf0f1; 
@@ -21,7 +22,7 @@
         }
         body { font-family: 'Segoe UI', 'Roboto', sans-serif; background: #1a252f; color: var(--text); padding: 20px; line-height: 1.5; font-size: 14px; }
         
-        .capture-wrapper { background: #1a252f; padding: 10px; border-radius: 8px; width: 100%; max-width: 750px; margin: auto; }
+        .capture-wrapper { background: #1a252f; padding: 10px; border-radius: 8px; width: 100%; max-width: 780px; margin: auto; }
         .card { background: var(--card-bg); padding: 30px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         
         h2 { text-align:center; margin-top:0; color: var(--text); font-weight: 600; font-size: 1.4rem; letter-spacing: 1px; }
@@ -34,6 +35,7 @@
         label { display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 5px; font-weight: 500; }
         input, select { width: 100%; padding: 10px; background: var(--panel-bg); border: 1px solid var(--border); color: #fff; border-radius: 4px; box-sizing: border-box; font-size: 0.95rem; }
         input:focus, select:focus { border-color: var(--neutral); outline: none; background: #3d566e; }
+        select option { background: var(--panel-bg); color: #fff; }
         
         .tip { font-size: 0.7rem; color: #7f8c8d; margin-top: 3px; }
         .hint-dynamic { color: var(--safe); font-weight: bold; }
@@ -55,7 +57,6 @@
         h4 { margin: 0 0 12px 0; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; }
         .tag { font-size: 0.7rem; padding: 2px 8px; background: var(--card-bg); color: var(--text-sub); border: 1px solid var(--border); border-radius: 2px; font-weight: normal; }
         
-        /* 数据展示 */
         .data-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
         .main-val { font-size: 2rem; font-weight: 700; line-height: 1; }
         .sub-data { text-align: right; font-size: 0.8rem; color: var(--text-sub); line-height: 1.4; }
@@ -70,15 +71,17 @@
         .da-val { font-size: 1.4rem; font-weight: bold; color: #fff; }
         .da-desc { font-size: 0.8rem; color: #95a5a6; margin-top: 5px; line-height: 1.4; }
 
-        /* 雷达与评价 */
-        .radar-container { margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border); }
-        .radar-row { display: flex; align-items: center; margin-bottom: 6px; }
-        .radar-label { width: 70px; font-size: 0.8rem; color: #bdc3c7; }
-        .radar-track { flex: 1; height: 6px; background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden; margin: 0 10px; }
-        .radar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
-        .radar-score { width: 30px; text-align: right; font-size: 0.8rem; font-weight: bold; color: #fff; }
+        /* 雷达与综合评价区 */
+        .eval-grid { display: grid; grid-template-columns: 1.1fr 1.5fr; gap: 20px; margin-top: 15px; }
+        .chart-container { width: 100%; aspect-ratio: 1 / 1; position: relative; }
         
-        .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        /* 释义图例 */
+        .legend-box { margin-top: 15px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 4px; border: 1px solid var(--border); }
+        .legend-title { font-size: 0.75rem; color: var(--text-sub); font-weight: bold; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); display: flex; align-items: center;}
+        .legend-item { font-size: 0.75rem; color: #95a5a6; margin-bottom: 6px; display: flex; align-items: flex-start; line-height: 1.4; }
+        .legend-item span { font-weight: bold; color: #ecf0f1; width: 68px; flex-shrink: 0; display: inline-block; }
+
+        .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; margin-bottom: 10px; }
         .sound-tag { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; color: #fff; font-weight: bold; }
 
         /* 结构建议列表 */
@@ -88,17 +91,11 @@
         .rec-list li { margin-bottom: 5px; }
         .rec-ok { color: var(--safe); font-size: 0.85rem; margin-top: 10px; font-weight: bold; }
 
-        /* 综合评价模块 */
-        .final-verdict { background: rgba(0,0,0,0.25); border: 1px solid #555; padding: 15px; border-radius: 6px; margin-top: 15px; }
-        .verdict-text { font-size: 0.9rem; color: #ecf0f1; line-height: 1.6; }
-        .verdict-item { margin-bottom: 10px; display: flex; align-items: flex-start; }
+        .final-verdict { background: rgba(0,0,0,0.25); border: 1px solid #555; padding: 15px; border-radius: 6px; display: flex; flex-direction: column; gap: 12px;}
+        .verdict-item { display: flex; align-items: flex-start; font-size: 0.9rem; color: #ecf0f1; line-height: 1.6; }
         .verdict-icon { margin-right: 8px; font-size: 1.1rem; flex-shrink: 0; }
         
-        .watermark { 
-            text-align: center; color: #666; font-size: 0.75rem; margin-top: 25px; 
-            border-top: 1px solid #444; padding-top: 15px; display: none; 
-            font-family: 'Consolas', monospace;
-        }
+        .watermark { text-align: center; color: #666; font-size: 0.75rem; margin-top: 25px; border-top: 1px solid #444; padding-top: 15px; display: none; font-family: 'Consolas', monospace; }
         .copyright { font-weight: bold; color: #888; margin-bottom: 5px; display: block; }
     </style>
 </head>
@@ -107,18 +104,18 @@
 <div id="capture-target" class="capture-wrapper">
     <div class="card">
         <h2>车载中音单元逆向分析系统</h2>
-        <span class="version">V27.0 Logic Fixed</span>
+        <span class="version">V31.0 Acoustic Matrix</span>
         
         <div class="section-title">1. 逆向容积与声学条件</div>
         <div class="input-grid">
             <div class="input-group">
                 <label>逆向建模净容积 (L)</label>
-                <input type="number" id="v_cad" value="0.50" step="0.05" oninput="updateCottonHint()">
+                <input type="number" id="v_cad" value="0.30" step="0.05" oninput="updateCottonHint()">
                 <div class="tip">扣除壁厚后的纯空腔体积</div>
             </div>
             <div class="input-group">
                 <label>单元磁钢占位 (L)</label>
-                <input type="number" id="v_driver" value="0.20" step="0.01" oninput="updateCottonHint()">
+                <input type="number" id="v_driver" value="0.10" step="0.01" oninput="updateCottonHint()">
             </div>
             <div class="input-group" style="grid-column: span 2;">
                 <label>声学填充方案 (影响等效容积)</label>
@@ -132,11 +129,20 @@
             </div>
         </div>
 
-        <div class="section-title">2. 单元 T/S 参数</div>
+        <div class="section-title">2. 单元规格与 T/S 参数</div>
         <div class="input-grid">
-            <div><label>Vas (L)</label><input type="number" id="vas" value="1.1"></div>
-            <div><label>Qts</label><input type="number" id="qts" value="0.36"></div>
-            <div><label>Fs (Hz)</label><input type="number" id="fs" value="91"></div>
+            <div class="input-group" style="grid-column: span 2;">
+                <label>驱动单元物理尺寸</label>
+                <select id="driver_size">
+                    <option value="2.5">2.5寸及以下 (常规分频推荐 >350Hz)</option>
+                    <option value="3.0" selected>3.0寸 (常规分频推荐 >250Hz)</option>
+                    <option value="3.5">3.5寸 (常规分频推荐 >200Hz)</option>
+                    <option value="4.0">4.0寸及以上 (全能型，要求深层下潜)</option>
+                </select>
+            </div>
+            <div><label>Vas (L)</label><input type="number" id="vas" value="1.1" step="0.1"></div>
+            <div><label>Qts</label><input type="number" id="qts" value="0.36" step="0.01"></div>
+            <div style="grid-column: span 2;"><label>Fs (Hz)</label><input type="number" id="fs" value="91"></div>
         </div>
         
         <div class="section-title">3. 结构工艺参数</div>
@@ -152,7 +158,7 @@
                 </select>
             </div>
             <div style="grid-column: span 2;">
-                <label>几何与表面处理 (影响结构刚性与驻波)</label>
+                <label>几何与表面处理 (影响刚性与驻波)</label>
                 <select id="special_tech">
                     <option value="1.0">基础: 平面/方盒 (低刚性/易驻波)</option>
                     <option value="1.5">进阶: 倒模异形曲面 (中高刚性)</option>
@@ -178,12 +184,25 @@
             <div id="str_eval" class="section"></div>
 
             <!-- 模块4：综合评价与建议 -->
-            <div id="multi_eval" class="section" style="border-left-color: var(--neutral); border-left-width: 6px;">
+            <div class="section" style="border-left-color: var(--neutral); border-left-width: 6px;">
                 <h4>综合评价与建议 <span class="tag">Comprehensive Review</span></h4>
-                <div id="radar_chart"></div>
-                <div class="tag-cloud" id="tag_cloud"></div>
-                <div class="final-verdict">
-                    <div id="final_verdict_content" class="verdict-text"></div>
+                <div class="eval-grid">
+                    <div>
+                        <div class="chart-container"><canvas id="radarChart"></canvas></div>
+                        <!-- 纯声学维度释义图例 -->
+                        <div class="legend-box">
+                            <div class="legend-title">🎯 纯声学品质评价维度释义</div>
+                            <div class="legend-item"><span>瞬态与解析:</span> 喇叭收放自如的程度。得分越高，声音越干净利落，不拖泥带水。</div>
+                            <div class="legend-item"><span>低频下潜:</span> 当前系统能否发出该尺寸喇叭应有的中低频厚度与饱满感。</div>
+                            <div class="legend-item"><span>动态承载力:</span> 容积越小内部气压越大，越能像弹簧一样拉住振膜，防止大音量拍边。</div>
+                            <div class="legend-item"><span>频响平坦度:</span> 得分高说明频响曲线平直自然；得分低说明低频某段有异常凸起或轰头感。</div>
+                            <div class="legend-item"><span>声段衔接度:</span> 评估当前中音能否与门板中低音顺滑交接，不出现频率断层。</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="tag-cloud" id="tag_cloud"></div>
+                        <div class="final-verdict" id="final_verdict_content"></div>
+                    </div>
                 </div>
             </div>
             
@@ -196,7 +215,8 @@
 </div>
 
 <script>
-// 实时计算棉花建议
+let myRadarChart = null;
+
 function updateCottonHint() {
     let v_cad = parseFloat(document.getElementById('v_cad').value);
     let v_driver = parseFloat(document.getElementById('v_driver').value);
@@ -208,10 +228,10 @@ function updateCottonHint() {
 
     if(mode == "1.12") {
         let g = Math.round(v_net * 12); 
-        hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：准备约 ${g}g ~ ${g+2}g 吸音棉，均匀蓬松填入。</span>`;
+        hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：建议准备约 ${g}g ~ ${g+2}g 吸音棉，均匀蓬松填入。</span>`;
     } else if (mode == "1.16") {
         let g = Math.round(v_net * 25); 
-        hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：准备约 ${g}g ~ ${g+4}g 吸音棉，需用力压实填入。</span>`;
+        hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：建议准备约 ${g}g ~ ${g+4}g 吸音棉，需用力压实填入。</span>`;
     } else if (mode == "1.06") {
         hint.innerHTML = "ℹ️ 操作指南：仅在内壁粘贴波浪棉或止震板，中间留空。";
     } else {
@@ -220,20 +240,21 @@ function updateCottonHint() {
 }
 
 function calculate() {
-    // 1. 数据采集
     const v_cad = parseFloat(document.getElementById('v_cad').value);
     const v_driver = parseFloat(document.getElementById('v_driver').value);
     const fill_gamma = parseFloat(document.getElementById('fill_mode').value);
-    const wall = parseFloat(document.getElementById('wall').value);
-    const mat_modulus = parseFloat(document.getElementById('material').value);
-    const tech_val = parseFloat(document.getElementById('special_tech').value);
+    
+    const d_size = parseFloat(document.getElementById('driver_size').value);
     const vas = parseFloat(document.getElementById('vas').value);
     const qts = parseFloat(document.getElementById('qts').value);
     const fs = parseFloat(document.getElementById('fs').value);
 
-    // 2. 基础物理计算
+    const wall = parseFloat(document.getElementById('wall').value);
+    const mat_modulus = parseFloat(document.getElementById('material').value);
+    const tech_val = parseFloat(document.getElementById('special_tech').value);
+
     const v_net = v_cad - v_driver;
-    if (v_net <= 0) { alert("逻辑错误：净容积为负值，请检查单元占位体积。"); return; }
+    if (v_net <= 0) { alert("逻辑错误：净容积不能小于或等于喇叭排开体积。"); return; }
     
     const v_eff = v_net * fill_gamma;
     const qtc = qts * Math.sqrt((vas / v_eff) + 1);
@@ -244,16 +265,25 @@ function calculate() {
     document.getElementById('watermark').style.display = 'block';
     document.getElementById('date-time').innerText = new Date().toLocaleString();
 
-    // 3. Qtc 数据展示
-    let q_class = "", q_title = "";
-    if (qtc < 0.65) { q_class = "status-warn"; q_title = "过阻尼 (Over-damped)"; } 
-    else if (qtc <= 0.85) { q_class = "status-safe"; q_title = "参考级 (Reference)"; } 
-    else if (qtc <= 1.1) { q_class = "status-warn"; q_title = "流行优化 (Punchy)"; } 
-    else { q_class = "status-danger"; q_title = "欠阻尼 (Under-damped)"; }
+    // 严谨尺寸底线矩阵
+    let safe_hz;
+    if (d_size <= 2.5) { safe_hz = 350; }
+    else if (d_size === 3.0) { safe_hz = 250; }
+    else if (d_size === 3.5) { safe_hz = 200; }
+    else { safe_hz = 150; }
 
-    let q_html = `<h4>声学响应特性 (Qtc) <span class="tag">System Response</span></h4>
+    // --- 1. Qtc 评估 ---
+    let q_class = "", q_title = "";
+    if (qtc < 0.65) { q_class = "status-warn"; q_title = "过阻尼 (低气压控制力弱)"; } 
+    else if (qtc <= 0.85) { q_class = "status-safe"; q_title = "平坦响应区 (声学黄金比例)"; } 
+    else if (qtc <= 1.1) { q_class = "status-warn"; q_title = "车载紧凑区 (高机电耦合)"; } 
+    else { q_class = "status-danger"; q_title = "欠阻尼 (高气压易共振轰头)"; }
+
+    document.getElementById('qtc_eval').className = "section " + q_class;
+    document.getElementById('qtc_eval').innerHTML = `
+        <h4>声学响应特性 (Qtc) <span class="tag">System Response</span></h4>
         <div class="data-row">
-            <div class="main-val" style="color:${getColor(q_class)}">${qtc.toFixed(3)}</div>
+            <div class="main-val" style="color:${q_class === 'status-danger' ? '#e74c3c' : (q_class === 'status-safe' ? '#27ae60' : '#f39c12')}">${qtc.toFixed(3)}</div>
             <div class="sub-data">
                 Fc: <b>${Math.round(fc)} Hz</b><br>
                 V_net: <b>${v_net.toFixed(2)} L</b>
@@ -261,181 +291,208 @@ function calculate() {
         </div>
         <div class="desc-text"><span class="desc-title">${q_title}</span></div>
     `;
-    document.getElementById('qtc_eval').innerHTML = q_html;
-    document.getElementById('qtc_eval').className = "section " + q_class;
 
-    // --- 4. DSP 分频策略 ---
-    let limit_hpf = Math.round(fc * 0.9);
-    if (qtc > 1.1) limit_hpf = Math.round(fc * 1.1); 
-
-    let rec_hpf = Math.round(fc * 1.35); 
-    let rec_slope = "12dB/Oct";
-    let is_limit_high = false;
-    let dsp_note = "设置处于线性工作区，无需特殊补偿。";
-
-    // Fc过高保护
-    if (fc > 190) { 
-        rec_hpf = Math.max(rec_hpf, 350);
-        rec_slope = "24dB/Oct";
-        dsp_note = `<span style="color:#e74c3c">警告：Fc 极高 (${Math.round(fc)}Hz)，必须将分频点设在 350Hz 以上并使用 24dB 斜率，否则大动态极易拍边！</span>`;
-        is_limit_high = true;
-    } else if (limit_hpf > 300) {
-        rec_hpf = Math.max(rec_hpf, limit_hpf + 50);
-        rec_slope = "24dB/Oct";
-        dsp_note = "警告：谐振频率极高，必须提高分频点并加大斜率以保护单元。";
-        is_limit_high = true;
-    } else if (rec_hpf < limit_hpf * 1.3) {
-        rec_slope = "24dB/Oct";
-        dsp_note = "注意：建议设置接近物理极限，推荐使用 24dB 斜率增加功率承受力。";
+    // --- 2. DSP 策略重构 ---
+    let mech_hz = Math.max(Math.round(fc * 0.9), safe_hz - 50);
+    let rec_hz = safe_hz;
+    if (qtc < 0.707) {
+        rec_hz = Math.max(Math.round(fc * 1.5), safe_hz); // 弱阻尼需提高分频点利用电学保护
+    } else {
+        rec_hz = Math.max(Math.round(fc * 1.2), safe_hz); // 强阻尼物理保护好，可贴近谐振点分频
     }
-    if (rec_hpf < 200 && !is_limit_high) rec_hpf = Math.max(200, rec_hpf);
 
-    let dsp_html = `<h4>DSP 分频策略建议 <span class="tag">Crossover Strategy</span></h4>
+    let eq_hint = "";
+    if (qtc > 0.85) {
+        let peak_db = Math.max(1, Math.round(20 * Math.log10(qtc)));
+        eq_hint = `<br><span style="color:var(--warn); margin-top:4px; display:inline-block; font-weight:600;">🎛️ EQ预判：需在 ${Math.round(fc)}Hz 附近做约 -${peak_db}dB 的衰减。</span>`;
+    } else {
+        eq_hint = `<br><span style="color:var(--text-sub); margin-top:4px; display:inline-block;">🎛️ EQ预判：频响平直，无需针对箱体做破坏性补偿。</span>`;
+    }
+
+    document.getElementById('dsp_eval').className = "section status-safe";
+    document.getElementById('dsp_eval').innerHTML = `
+        <h4>DSP 分频策略建议 <span class="tag">Crossover Strategy</span></h4>
         <div class="dual-advice">
-            <div class="da-card" style="border-color:${is_limit_high ? '#c0392b' : '#465c71'}">
+            <div class="da-card" style="border-color:#c0392b">
                 <div class="da-title">🛑 物理安全底线</div>
-                <div class="da-val" style="color:#e74c3c">${limit_hpf} Hz <span style="font-size:0.9rem">/ 24dB</span></div>
-                <div class="da-desc">单元机械冲程保护线。</div>
+                <div class="da-val" style="color:#e74c3c">${mech_hz} Hz <span style="font-size:0.9rem">/ 24dB</span></div>
+                <div class="da-desc">单元机械冲程极限定标，低于此频率极易拍边损毁。</div>
             </div>
             <div class="da-card" style="border-color:var(--neutral); background:rgba(41, 128, 185, 0.1);">
                 <div class="da-title">🎧 推荐工作参数</div>
-                <div class="da-val" style="color:#3498db">${rec_hpf} Hz <span style="font-size:0.9rem">/ ${rec_slope}</span></div>
-                <div class="da-desc">最佳失真控制与听感平衡点。</div>
+                <div class="da-val" style="color:#3498db">${rec_hz} Hz <span style="font-size:0.9rem">/ 12~24dB</span></div>
+                <div class="da-desc">最佳失真控制与听感平衡点。${eq_hint}</div>
             </div>
         </div>
-        <div class="desc-text" style="font-size:0.85rem; color:#95a5a6;">${dsp_note}</div>`;
-    
-    document.getElementById('dsp_eval').innerHTML = dsp_html;
-    document.getElementById('dsp_eval').className = "section " + (is_limit_high ? "status-warn" : "status-safe");
+    `;
 
-
-    // --- 5. 箱体结构评估 ---
+    // --- 3. 结构评估 ---
     let vol_penalty = Math.pow(v_cad, 0.3); 
     let load_factor = qtc / 0.7;
     let strength_val = (Math.pow(wall, 1.8) * mat_modulus * tech_val) / vol_penalty;
     let safety_ratio = strength_val / load_factor;
 
-    let str_html = `<h4>箱体结构评估及建议 <span class="tag">Structural Analysis</span></h4>`;
-    let str_class = "";
-    let str_status = "";
+    let str_class = safety_ratio > 18 ? "status-safe" : (safety_ratio > 12 ? "status-warn" : "status-danger");
+    let str_status = safety_ratio > 30 ? "谐振风险：极低" : (safety_ratio > 18 ? "谐振风险：低" : (safety_ratio > 12 ? "谐振风险：中" : "谐振风险：高"));
     let recommendations = [];
-
-    if (safety_ratio > 30) { str_class = "status-safe"; str_status = "谐振风险：极低 (Very Low)"; } 
-    else if (safety_ratio > 18) { str_class = "status-safe"; str_status = "谐振风险：低 (Low)"; } 
-    else if (safety_ratio > 12) { str_class = "status-warn"; str_status = "谐振风险：中 (Moderate)"; } 
-    else { str_class = "status-danger"; str_status = "谐振风险：高 (High Risk)"; }
 
     if (safety_ratio <= 25) { 
         if (mat_modulus < 1.3) recommendations.push("材料刚性偏低，建议更换为 ASA/ABS 或 碳纤维耗材。");
         if (wall < 3.0) recommendations.push(`当前壁厚较薄，建议增加至 3.5mm 或以上。`);
         else if (safety_ratio < 12) recommendations.push(`鉴于当前负载极大，建议壁厚增加至 ${(wall+1.0).toFixed(1)}mm。`);
-        
-        if (tech_val < 1.9) recommendations.push("建议开启切片软件 'Fuzzy Skin' (模糊表皮) [内壁模式] 以增加刚性。");
-        if (tech_val < 2.2) recommendations.push("建议在内壁涂抹原子灰、树脂或专用阻尼胶，消除空腔反射。");
+        if (tech_val < 1.9) recommendations.push("建议开启切片软件模糊表皮以增加刚性。");
+        if (tech_val < 2.2) recommendations.push("建议在内壁涂抹原子灰或专用阻尼胶，消除空腔反射。");
     }
 
+    let str_html = `<h4>箱体结构评估及建议 <span class="tag">Structural Analysis</span></h4>`;
     str_html += `<div class="data-row"><div class="main-val" style="font-size:1.4rem;">${str_status}</div></div>`;
-    
     if (recommendations.length > 0) {
-        str_html += `<div class="rec-box"><span class="rec-title">📋 改进建议 (Recommendations)</span><ul class="rec-list">${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
+        str_html += `<div class="rec-box"><span class="rec-title">📋 改进建议</span><ul class="rec-list">${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
     } else {
         str_html += `<div class="rec-ok">√ 结构设计合理，工艺配置恰当。</div>`;
     }
-
-    document.getElementById('str_eval').innerHTML = str_html;
     document.getElementById('str_eval').className = "section " + str_class;
+    document.getElementById('str_eval').innerHTML = str_html;
 
-
-    // --- 6. 综合评价与详细解读 (逻辑修复版 V27) ---
+    // --- 4. 纯声学雷达数据 (全面重构为严谨物理映射) ---
+    // 瞬态：锚定0.707，偏离即扣分
+    let s_transient = 100 - Math.abs(qtc - 0.707) * 100;
     
-    let score_transient = 0, score_body = 0, score_monitor = 0;
+    // 低频下潜：基于 Fc/Fs 比值，容积越小 Fc 越高，得分暴跌
+    let s_lf = 100 - (fc / fs - 1) * 35;
+    
+    // 物理控制力：容积越小(Qtc越大)抗冲程能力越好，最高封顶至 Qtc=1.0 左右
+    let s_power = qtc <= 1.0 ? (qtc / 1.0) * 100 : 100 - (qtc - 1.0) * 50;
+    
+    // 平坦度：锚定0.707，Qtc 越高驻波峰值越大，得分越低
+    let s_flatness = 100 - Math.abs(qtc - 0.707) * 80;
+    
+    // 衔接度：推算的最佳分频点如果高于该尺寸常规分界线，给中低音造成压力，则扣分
+    let s_synergy = 100 - Math.max(0, rec_hz - safe_hz) * 0.5;
+
+    // 分数约束函数
+    const cap = (val) => Math.round(Math.max(0, Math.min(100, val)));
+    renderRadar([cap(s_transient), cap(s_lf), cap(s_power), cap(s_flatness), cap(s_synergy)]);
+
+    // 标签系统重构
     let tags = [];
-    let advice_items = []; 
-
-    // A. 雷达评分逻辑
-    if(qtc < 0.6) score_transient = 95;
-    else if(qtc < 0.8) score_transient = 85;
-    else if(qtc <= 1.1) score_transient = 65; 
-    else score_transient = 40;
-
-    // 修改雷达-人声厚度的阈值，使其与评价一致
-    if(fc > 200) { score_body = 15; tags.push({t:"下潜缺失", c:"#c0392b"}); }
-    else if(fc > 175) { score_body = 40; tags.push({t:"声线偏瘦", c:"#e67e22"}); } // 188Hz会落在这里，40分，比较合理
-    else if(fc > 140) { score_body = 70; tags.push({t:"厚度适中", c:"#f1c40f"}); }
-    else { score_body = 90; tags.push({t:"人声浑厚", c:"#27ae60"}); }
-
-    let q_dist = Math.abs(qtc - 0.707);
-    score_monitor = Math.max(0, Math.round(100 - (q_dist * 150))); 
-    if (fc > 190 && score_monitor > 60) score_monitor = 50; 
-
-    // B. 标签 (风格)
-    if(qtc < 0.6) tags.push({t:"风格冷艳", c:"#2980b9"});
-    if(qtc > 1.0) tags.push({t:"风格暖糊", c:"#d35400"});
+    if(qtc > 1.0) tags.push({t:"高压抗冲程", c:"#2980b9"});
+    if(cap(s_lf) < 60) tags.push({t:"下潜严重受限", c:"#c0392b"});
+    if(cap(s_transient) >= 85) tags.push({t:"监听级瞬态", c:"#27ae60"});
+    if(qtc < 0.65) tags.push({t:"动态保护偏弱", c:"#f39c12"});
+    if(qtc > 0.85 && qtc <= 1.1) tags.push({t:"车载妥协级", c:"#f39c12"});
     
-    // C. 智能诊断 (核心逻辑修正)
+    document.getElementById('tag_cloud').innerHTML = tags.map(t => `<span class="sound-tag" style="background:${t.c}">${t.t}</span>`).join('');
+
+    // --- 5. 综合评价推导计算 (完全重构) ---
+    let v_cad_0707 = -1, v_cad_085 = -1;
+    // 仅当喇叭具备密闭箱工作潜质时计算目标容积
+    if (qts < 0.70) {
+        let veff = vas / (Math.pow(0.707 / qts, 2) - 1);
+        v_cad_0707 = (veff / fill_gamma) + v_driver;
+    }
+    if (qts < 0.84) {
+        let veff = vas / (Math.pow(0.85 / qts, 2) - 1);
+        v_cad_085 = (veff / fill_gamma) + v_driver;
+    }
+
+    let targetText0707 = v_cad_0707 > 0 ? v_cad_0707.toFixed(2) + " L" : "（该单元Qts偏高，不适合此类工况）";
+    let targetText085 = v_cad_085 > 0 ? v_cad_085.toFixed(2) + " L" : "（该单元Qts偏高，不适合此类工况）";
+
+    let verdict_html = "";
     
-    // 1. 全局 Fc 检查 (High Fc Trap)
-    if (fc > 200) {
-        advice_items.push(`<span style="color:#e74c3c">🛑 <b>数据陷阱 (Fc极高)：</b>虽然 Q 值可能合适，但系统谐振频率 (${Math.round(fc)}Hz) 极高。这意味着没有下潜，听感会像高音喇叭一样干薄。<b>强烈建议加大容积！</b></span>`);
+    if (qtc > 1.1) {
+        verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">🚫</div>
+                <div><b>物理空间严重受限：</b>当前容积对该单元而言极小（Qtc=${qtc.toFixed(2)}），产生了过硬的空气弹簧，Fc 被推高至 ${Math.round(fc)}Hz。声音会发紧、干瘪且伴随明显的共振轰头感，强行靠 DSP 切除低频会导致声场变薄，不建议直接施工倒模。</div>
+            </div>`;
+        if (v_cad_085 > 0) {
+            verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">👉</div>
+                <div style="color:var(--safe)"><b>方案调整指引：</b>建议修改倒模设计以增加净容积。若要达到车载标准的可接受弹力边界（Qtc≈0.85），<b>参考目标体积至少需约 ${targetText085}</b>。若物理空间绝对受限无法扩容，建议直接更换 Vas 或 Qts 更低的中音单元。</div>
+            </div>`;
+        }
     } 
+    else if (qtc > 0.85 && qtc <= 1.1) {
+        verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">📊</div>
+                <div><b>典型车载妥协容积：</b>系统阻尼偏强（Qtc=${qtc.toFixed(2)}）。这是一个兼顾视线与声学的实战级妥协容积。内部高气压让喇叭获得了极佳的机械控制力，极难拍边损坏。但频响在 ${Math.round(fc)}Hz 附近必然存在凸起，<b>施工可行，但高度依赖 DSP 的 EQ 进行压制衰减</b>。</div>
+            </div>`;
+        if (v_cad_0707 > 0) {
+            verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">👉</div>
+                <div style="color:var(--safe)"><b>进阶方案指引：</b>若您对声音的宽松度和下潜深度有苛刻要求，可尝试将容积进一步扩大至 <b>${targetText0707} 左右</b>，以获得无需 EQ 强行介入的自然听感。</div>
+            </div>`;
+        }
+    }
+    else if (qtc >= 0.65 && qtc <= 0.85) {
+        verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">🏆</div>
+                <div><b>声学黄金箱体：</b>极佳的电声物理配比（Qtc=${qtc.toFixed(2)}）。空气弹簧软硬适中，频响自然平坦，下潜深且瞬态表现优异。基本无需做破坏性的 EQ 补偿，单元可以发出宽松、舒展、无压迫感的声音。</div>
+            </div>`;
+        verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">⚠️</div>
+                <div style="color:var(--warn)"><b>配套调音提示：</b>由于箱体空气阻力处于标准状态，大动态时振膜冲程释放较为彻底。在 DSP 调音时，请务必设置不低于 ${mech_hz}Hz 的高通滤波器（HPF），并建议采用至少 12dB/Oct 的斜率进行电学保护。</div>
+            </div>`;
+    }
     else {
-        // 2. 根据 Qtc 和 Fc 组合判断
-        if (qtc >= 0.6 && qtc <= 0.85) {
-            // 修正点：收紧了黄金匹配的 Fc 门槛 (从190降为170)
-            if (fc > 170) {
-                // 新增：高解析/偏瘦 状态 (对应 188Hz 的情况)
-                advice_items.push(`<span style="color:#8e44ad">ℹ️ <b>高解析/监听风格：</b>Qtc 完美(控制力强)，但物理下潜 (${Math.round(fc)}Hz) 受限。听感会非常干净、瞬态快，但声底偏瘦。适合听器乐/女声，不适合大动态流行。</span>`);
-            } else {
-                advice_items.push(`<span style="color:#27ae60">✅ <b>黄金匹配：</b>控制力与下潜俱佳。既有参考级的精准度，又有合理的厚度。理想的 Hi-Fi 状态。</span>`);
-            }
-        } 
-        else if (qtc > 0.85 && qtc <= 1.1) {
-            advice_items.push(`<span style="color:#f39c12">ℹ️ <b>风格提示：</b>当前处于“流行调音区”。中低频有适度隆起，听感饱满有力。虽然不如参考级精准，但适合车内环境。</span>`);
-        }
-        else if (qtc > 1.1) {
-            advice_items.push(`<span style="color:#e74c3c">⚠️ <b>容积过小：</b>低频隆起严重，声音发闷轰头。</span>`);
-        } 
-        else if (qtc < 0.6) {
-            advice_items.push(`ℹ️ <b>风格提示：</b>过阻尼状态，声音干净但偏干。建议改为“空箱”试试。`);
+        verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">⚠️</div>
+                <div><b>容积偏大 / 保护不足：</b>当前容积过大（Qtc=${qtc.toFixed(2)}），低频测试数据虽好，但丧失了空气弹簧的物理约束力。在大动态交响乐或电音环境下，单元有极高的冲程过载（拍边）风险，声音收敛速度也会稍显拖泥带水。</div>
+            </div>`;
+        if (v_cad_0707 > 0) {
+            verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">👉</div>
+                <div style="color:var(--safe)"><b>方案调整指引：</b>建议通过在箱体内填入实心木块或注入适量树脂来主动减小容积。<b>参考最佳体积约为 ${targetText0707} 左右</b>，让机械控制力回归至理想区间。</div>
+            </div>`;
         }
     }
 
-    // 3. 细节检查
-    if (fill_gamma < 1.07 && tech_val == 1.0) { 
-        advice_items.push(`⚠️ <b>驻波风险：</b>检测到“空箱/薄棉”且结构为“平面/方盒”。建议改为曲面结构，或至少在背板贴波浪棉。`);
-    }
-    if (safety_ratio < 15 && qtc > 0.95) {
-        advice_items.push(`⚠️ <b>共振风险：</b>气压大 (Qtc高) 但结构一般。大动态下箱体可能震动。建议增加壁厚或加强筋。`);
-    }
+    document.getElementById('final_verdict_content').innerHTML = verdict_html;
+}
 
-    // 生成 HTML
-    let advice_html = advice_items.map(item => `<div class="verdict-item"><div class="verdict-icon">👉</div><div>${item}</div></div>`).join('');
-    if (advice_html === "") advice_html = '<div class="verdict-item">暂无特殊建议，系统运行在标准范围内。</div>';
-    document.getElementById('final_verdict_content').innerHTML = advice_html;
-
-    // 渲染雷达
-    document.getElementById('radar_chart').innerHTML = `
-        ${makeBar('瞬态响应 (Speed)', Math.round(score_transient), '#00cec9')}
-        ${makeBar('人声厚度 (Body)', Math.round(score_body), '#fdcb6e')}
-        ${makeBar('还原精准 (HiFi)', Math.round(score_monitor), '#a29bfe')}
-    `;
+function renderRadar(dataArr) {
+    const ctx = document.getElementById('radarChart').getContext('2d');
+    if (myRadarChart) { myRadarChart.destroy(); }
     
-    // 渲染标签
-    let tag_html = tags.map(t => `<span class="sound-tag" style="background:${t.c}">${t.t}</span>`).join('');
-    document.getElementById('tag_cloud').innerHTML = tag_html;
-}
+    Chart.defaults.color = '#bdc3c7';
+    Chart.defaults.font.family = "'Segoe UI', sans-serif";
 
-function makeBar(label, val, color) {
-    return `
-        <div class="radar-row">
-            <div class="radar-label">${label}</div>
-            <div class="radar-track"><div class="radar-fill" style="width:${val}%; background:${color}"></div></div>
-            <div class="radar-score">${val}</div>
-        </div>
-    `;
+    myRadarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['瞬态与解析', '低频下潜', '动态承载力', '频响平坦度', '声段衔接度'],
+            datasets: [{
+                label: '声学得分',
+                data: dataArr,
+                backgroundColor: 'rgba(41, 128, 185, 0.3)',
+                borderColor: '#3498db',
+                pointBackgroundColor: '#2ecc71',
+                borderWidth: 2, pointRadius: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            scales: {
+                r: {
+                    angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    pointLabels: { font: { size: 10, weight: 'bold' }, color: '#ecf0f1' },
+                    ticks: { display: false, min: 0, max: 100, stepSize: 20 }
+                }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
 }
-
-function getColor(cls) { return cls.includes('safe') ? '#27ae60' : (cls.includes('warn') ? '#f39c12' : '#c0392b'); }
 
 function takeScreenshot() {
     const target = document.getElementById("capture-target");
@@ -444,13 +501,15 @@ function takeScreenshot() {
     html2canvas(target, { backgroundColor: "#1a252f", scale: 2 }).then(canvas => {
         btns.style.display = 'grid'; 
         const link = document.createElement('a');
-        link.download = `邓琰_中音逆向分析报告_${new Date().toISOString().slice(0,10)}.png`;
+        link.download = `车载声学评估报告_${new Date().toISOString().slice(0,10)}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     });
 }
-// Init
+
+// 初始化
 updateCottonHint();
+window.onload = () => { renderRadar([50,50,50,50,50]); }
 </script>
 </body>
 </html>
