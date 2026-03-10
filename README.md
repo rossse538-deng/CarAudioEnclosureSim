@@ -1,4 +1,4 @@
-# Logic V27 - 车载中音逆向分析系统 (Midrange Enclosure Calculator)
+# Logic V31 - 车载中音逆向分析系统 (Midrange Enclosure Calculator)
 
 ## 项目简介 (Introduction)
 这是一个基于声学物理模型开发的Web端计算工具，专为汽车音响改装设计。
