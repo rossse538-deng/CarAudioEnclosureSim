@@ -196,7 +196,7 @@
                             <div class="legend-item"><span>低频下潜:</span> 当前系统能否发出该尺寸喇叭应有的中低频厚度与饱满感。</div>
                             <div class="legend-item"><span>动态承载力:</span> 容积越小内部气压越大，越能像弹簧一样拉住振膜，防止大音量拍边。</div>
                             <div class="legend-item"><span>频响平坦度:</span> 得分高说明频响曲线平直自然；得分低说明低频某段有异常凸起或轰头感。</div>
-                            <div class="legend-item"><span>声段衔接度:</span> 评估当前中音能否与门板中低音顺滑交接，不出现频率断层。</div>
+                            <div class="legend-item"><span>声段衔接度:</span> 评估物理极限是否超标。如果得分偏低，说明容积过小导致分频底线太高，门板中低音向上衔接会非常吃力。</div>
                         </div>
                     </div>
                     <div>
@@ -292,14 +292,10 @@ function calculate() {
         <div class="desc-text"><span class="desc-title">${q_title}</span></div>
     `;
 
-    // --- 2. DSP 策略重构 ---
-    let mech_hz = Math.max(Math.round(fc * 0.9), safe_hz - 50);
-    let rec_hz = safe_hz;
-    if (qtc < 0.707) {
-        rec_hz = Math.max(Math.round(fc * 1.5), safe_hz); // 弱阻尼需提高分频点利用电学保护
-    } else {
-        rec_hz = Math.max(Math.round(fc * 1.2), safe_hz); // 强阻尼物理保护好，可贴近谐振点分频
-    }
+    // --- 2. DSP 策略重构 (加入详细斜率与听感说明) ---
+    // 严谨声学标准：1.5倍Fc为临界下限，2.0倍Fc为高保真推荐
+    let mech_hz = Math.max(Math.round(fc * 1.5), safe_hz); 
+    let rec_hz = Math.max(Math.round(fc * 2.0), safe_hz);
 
     let eq_hint = "";
     if (qtc > 0.85) {
@@ -314,15 +310,18 @@ function calculate() {
         <h4>DSP 分频策略建议 <span class="tag">Crossover Strategy</span></h4>
         <div class="dual-advice">
             <div class="da-card" style="border-color:#c0392b">
-                <div class="da-title">🛑 物理安全底线</div>
-                <div class="da-val" style="color:#e74c3c">${mech_hz} Hz <span style="font-size:0.9rem">/ 24dB</span></div>
-                <div class="da-desc">单元机械冲程极限定标，低于此频率极易拍边损毁。</div>
+                <div class="da-title">🛑 临界工作下限 (1.5x Fc)</div>
+                <div class="da-val" style="color:#e74c3c">${mech_hz} Hz <span style="font-size:0.85rem; color:#bdc3c7;">/ 建议 ≥24dB/Oct</span></div>
+                <div class="da-desc">该频点刚脱离物理冲程危险区，但仍受谐振阻抗影响。<b>必须强制使用高阶陡峭斜率（如 24dB 甚至 36dB）</b>切断低频。听感上声音偏硬朗，通常仅在门板中低音实力较弱、无法向上延伸时妥协采用。</div>
             </div>
             <div class="da-card" style="border-color:var(--neutral); background:rgba(41, 128, 185, 0.1);">
-                <div class="da-title">🎧 推荐工作参数</div>
-                <div class="da-val" style="color:#3498db">${rec_hz} Hz <span style="font-size:0.9rem">/ 12~24dB</span></div>
-                <div class="da-desc">最佳失真控制与听感平衡点。${eq_hint}</div>
+                <div class="da-title">🎧 高保真推荐点 (2.0x Fc)</div>
+                <div class="da-val" style="color:#3498db">${rec_hz} Hz <span style="font-size:0.85rem; color:#bdc3c7;">/ 建议 12~24dB/Oct</span></div>
+                <div class="da-desc">该频点已彻底避开阻抗与相位突变区，互调失真（IMD）极低。<b>此时允许使用 12dB/Oct 等平缓斜率</b>。听感上瞬态绝佳、人声通透顺滑，能与门板中低音产生极度自然的频段融合。${eq_hint}</div>
             </div>
+        </div>
+        <div style="font-size: 0.75rem; color: #95a5a6; margin-top: 15px; line-height: 1.5; border-top: 1px dashed var(--border); padding-top: 10px;">
+            <b>ℹ️ 客观调音声明：</b>以上分频点与斜率建议基于 T/S 参数与密闭箱声学物理模型计算（理想无限大障板环境）。在实际车内环境中，由于仪表台反射角（Horn Effect）、玻璃折射以及不同喇叭的离轴衰减特性，最终的交越频率、斜率组合及相位对齐，<b>严禁生搬硬套，务必使用 RTA 声学测试麦克风测量实际频响曲线，并以最终听感验证为准。</b>
         </div>
     `;
 
@@ -354,23 +353,15 @@ function calculate() {
     document.getElementById('str_eval').className = "section " + str_class;
     document.getElementById('str_eval').innerHTML = str_html;
 
-    // --- 4. 纯声学雷达数据 (全面重构为严谨物理映射) ---
-    // 瞬态：锚定0.707，偏离即扣分
+    // --- 4. 纯声学雷达数据 (衔接度逻辑已彻底修正) ---
     let s_transient = 100 - Math.abs(qtc - 0.707) * 100;
-    
-    // 低频下潜：基于 Fc/Fs 比值，容积越小 Fc 越高，得分暴跌
     let s_lf = 100 - (fc / fs - 1) * 35;
-    
-    // 物理控制力：容积越小(Qtc越大)抗冲程能力越好，最高封顶至 Qtc=1.0 左右
     let s_power = qtc <= 1.0 ? (qtc / 1.0) * 100 : 100 - (qtc - 1.0) * 50;
-    
-    // 平坦度：锚定0.707，Qtc 越高驻波峰值越大，得分越低
     let s_flatness = 100 - Math.abs(qtc - 0.707) * 80;
     
-    // 衔接度：推算的最佳分频点如果高于该尺寸常规分界线，给中低音造成压力，则扣分
-    let s_synergy = 100 - Math.max(0, rec_hz - safe_hz) * 0.5;
+    // 【修正说明】只有当“物理极限下限(mech_hz)”被迫大幅度超越该喇叭的安全底线时，才会导致中低音接不上，此时才扣分。高保真推荐点高并不会影响衔接度得分。
+    let s_synergy = 100 - Math.max(0, mech_hz - safe_hz) * 0.6;
 
-    // 分数约束函数
     const cap = (val) => Math.round(Math.max(0, Math.min(100, val)));
     renderRadar([cap(s_transient), cap(s_lf), cap(s_power), cap(s_flatness), cap(s_synergy)]);
 
@@ -384,9 +375,8 @@ function calculate() {
     
     document.getElementById('tag_cloud').innerHTML = tags.map(t => `<span class="sound-tag" style="background:${t.c}">${t.t}</span>`).join('');
 
-    // --- 5. 综合评价推导计算 (完全重构) ---
+    // --- 5. 综合评价推导计算 ---
     let v_cad_0707 = -1, v_cad_085 = -1;
-    // 仅当喇叭具备密闭箱工作潜质时计算目标容积
     if (qts < 0.70) {
         let veff = vas / (Math.pow(0.707 / qts, 2) - 1);
         v_cad_0707 = (veff / fill_gamma) + v_driver;
@@ -438,7 +428,7 @@ function calculate() {
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">⚠️</div>
-                <div style="color:var(--warn)"><b>配套调音提示：</b>由于箱体空气阻力处于标准状态，大动态时振膜冲程释放较为彻底。在 DSP 调音时，请务必设置不低于 ${mech_hz}Hz 的高通滤波器（HPF），并建议采用至少 12dB/Oct 的斜率进行电学保护。</div>
+                <div style="color:var(--warn)"><b>配套调音提示：</b>由于箱体空气阻力处于标准状态，大动态时振膜冲程释放较为彻底。在 DSP 调音时，高通滤波器（HPF）建议设置在 <b>${mech_hz}Hz 到 ${rec_hz}Hz 之间</b>，具体视选择的分频斜率与实际听感而定，切忌设置过低。</div>
             </div>`;
     }
     else {
