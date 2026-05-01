@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>车载中音单元逆向分析 V31.0 (综合进化版)</title>
+    <title>车载中音单元逆向分析 V32.0 (综合进化版)</title>
     <!-- 引入截图功能库与图表库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -104,7 +104,7 @@
 <div id="capture-target" class="capture-wrapper">
     <div class="card">
         <h2>车载中音单元逆向分析系统</h2>
-        <span class="version">V31.0 Acoustic Matrix</span>
+        <span class="version">V32.0 Acoustic Matrix</span>
         
         <div class="section-title">1. 逆向容积与声学条件</div>
         <div class="input-grid">
@@ -333,7 +333,7 @@ function calculate() {
 
     let str_class = safety_ratio > 18 ? "status-safe" : (safety_ratio > 12 ? "status-warn" : "status-danger");
     let str_status = safety_ratio > 30 ? "谐振风险：极低" : (safety_ratio > 18 ? "谐振风险：低" : (safety_ratio > 12 ? "谐振风险：中" : "谐振风险：高"));
-    let recommendations = [];
+    let recommendations =[];
 
     if (safety_ratio <= 25) { 
         if (mat_modulus < 1.3) recommendations.push("材料刚性偏低，建议更换为 ASA/ABS 或 碳纤维耗材。");
@@ -366,7 +366,7 @@ function calculate() {
     renderRadar([cap(s_transient), cap(s_lf), cap(s_power), cap(s_flatness), cap(s_synergy)]);
 
     // 标签系统重构
-    let tags = [];
+    let tags =[];
     if(qtc > 1.0) tags.push({t:"高压抗冲程", c:"#2980b9"});
     if(cap(s_lf) < 60) tags.push({t:"下潜严重受限", c:"#c0392b"});
     if(cap(s_transient) >= 85) tags.push({t:"监听级瞬态", c:"#27ae60"});
@@ -404,6 +404,15 @@ function calculate() {
                 <div style="color:var(--safe)"><b>方案调整指引：</b>建议修改倒模设计以增加净容积。若要达到车载标准的可接受弹力边界（Qtc≈0.85），<b>参考目标体积至少需约 ${targetText085}</b>。若物理空间绝对受限无法扩容，建议直接更换 Vas 或 Qts 更低的中音单元。</div>
             </div>`;
         }
+        if (qts > 0.6) {
+            verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">💡</div>
+                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>由于该单元天然高 Qts（${qts}），小容积导致严重欠阻尼。若体积已达物理极限无法扩容，强烈建议放弃绝对密封，改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
+                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度阻尼材料（如羊毛毡、压缩白棉）紧密覆盖，形成声学流阻以释放气压，强制将 Qtc 拉回平滑区间。<br>
+                <b>注意：</b>泄露的背波严禁直排入易共振的饰板空腔内，且 DSP 高通必须严格设置在 Fc 以上。</span></div>
+            </div>`;
+        }
     } 
     else if (qtc > 0.85 && qtc <= 1.1) {
         verdict_html += `
@@ -416,6 +425,15 @@ function calculate() {
             <div class="verdict-item">
                 <div class="verdict-icon">👉</div>
                 <div style="color:var(--safe)"><b>进阶方案指引：</b>若您对声音的宽松度和下潜深度有苛刻要求，可尝试将容积进一步扩大至 <b>${targetText0707} 左右</b>，以获得无需 EQ 强行介入的自然听感。</div>
+            </div>`;
+        }
+        if (qts > 0.6 && qtc > 1.0) {
+            verdict_html += `
+            <div class="verdict-item">
+                <div class="verdict-icon">💡</div>
+                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>当前单元属于高 Qts（${qts}）设计。若想消除声学紧绷感且无法扩容，建议改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
+                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度阻尼材料紧密覆盖，利用声学流阻强制降低系统 Qtc。<br>
+                <b>注意：</b>泄露的声能需妥善疏导避免引起塑料件共振，DSP 高通切忌设置过低。</span></div>
             </div>`;
         }
     }
@@ -459,8 +477,8 @@ function renderRadar(dataArr) {
     myRadarChart = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['瞬态与解析', '低频下潜', '动态承载力', '频响平坦度', '声段衔接度'],
-            datasets: [{
+            labels:['瞬态与解析', '低频下潜', '动态承载力', '频响平坦度', '声段衔接度'],
+            datasets:[{
                 label: '声学得分',
                 data: dataArr,
                 backgroundColor: 'rgba(41, 128, 185, 0.3)',
