@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>车载中音单元逆向分析 V32.0 (综合进化版)</title>
+    <title>车载中音单元逆向分析 V33.0 (高颗粒度客观版)</title>
     <!-- 引入截图功能库与图表库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -104,7 +104,7 @@
 <div id="capture-target" class="capture-wrapper">
     <div class="card">
         <h2>车载中音单元逆向分析系统</h2>
-        <span class="version">V32.0 Acoustic Matrix</span>
+        <span class="version">V33.0 Acoustic Matrix</span>
         
         <div class="section-title">1. 逆向容积与声学条件</div>
         <div class="input-grid">
@@ -192,11 +192,11 @@
                         <!-- 纯声学维度释义图例 -->
                         <div class="legend-box">
                             <div class="legend-title">🎯 纯声学品质评价维度释义</div>
-                            <div class="legend-item"><span>瞬态与解析:</span> 喇叭收放自如的程度。得分越高，声音越干净利落，不拖泥带水。</div>
-                            <div class="legend-item"><span>低频下潜:</span> 当前系统能否发出该尺寸喇叭应有的中低频厚度与饱满感。</div>
-                            <div class="legend-item"><span>动态承载力:</span> 容积越小内部气压越大，越能像弹簧一样拉住振膜，防止大音量拍边。</div>
-                            <div class="legend-item"><span>频响平坦度:</span> 得分高说明频响曲线平直自然；得分低说明低频某段有异常凸起或轰头感。</div>
-                            <div class="legend-item"><span>声段衔接度:</span> 评估物理极限是否超标。如果得分偏低，说明容积过小导致分频底线太高，门板中低音向上衔接会非常吃力。</div>
+                            <div class="legend-item"><span>瞬态与解析:</span> 喇叭阻尼与时域收敛反应。得分越高，余振收尾越快，时域失真越低。</div>
+                            <div class="legend-item"><span>低频下潜:</span> 当前系统在密闭腔体内能够输出的有效声能下限。</div>
+                            <div class="legend-item"><span>动态承载力:</span> 容积压缩产生的反向气垫约束力。得分越高，越能抑制大动态下的振膜过载拍边。</div>
+                            <div class="legend-item"><span>频响平坦度:</span> 得分反映Q值谐振峰的隆起程度。得分越高，谐振峰越低，频响越接近理论直线。</div>
+                            <div class="legend-item"><span>声段衔接度:</span> 评估Fc对安全物理分频点交越的约束。得分低意味着高谐振迫使分频点上移，增加了中低音衔接难度。</div>
                         </div>
                     </div>
                     <div>
@@ -272,24 +272,60 @@ function calculate() {
     else if (d_size === 3.5) { safe_hz = 200; }
     else { safe_hz = 150; }
 
-    // --- 1. Qtc 评估 ---
-    let q_class = "", q_title = "";
-    if (qtc < 0.65) { q_class = "status-warn"; q_title = "过阻尼 (低气压控制力弱)"; } 
-    else if (qtc <= 0.85) { q_class = "status-safe"; q_title = "平坦响应区 (声学黄金比例)"; } 
-    else if (qtc <= 1.1) { q_class = "status-warn"; q_title = "车载紧凑区 (高机电耦合)"; } 
-    else { q_class = "status-danger"; q_title = "欠阻尼 (高气压易共振轰头)"; }
+    // --- 1. Qtc 评估 (V33.0 7级客观分析重构) ---
+    let q_class = "", q_title = "", q_desc = "";
+    if (qtc < 0.50) {
+        q_class = "status-danger";
+        q_title = "1级: 深度过阻尼 (声能下潜严重受限)";
+        q_desc = "系统总阻尼过高。由于腔体等效容积过大，空气弹簧（气垫效应）形同虚设，无法对振膜提供物理位移约束。低频下潜截止频率明显偏高，中低频段（100Hz-250Hz）能量衰减过快。在大信号输入时，因缺乏气垫阻尼保护，振膜冲程极易超出安全物理极限，导致物理撞摆或拍边损坏。";
+    } 
+    else if (qtc < 0.65) {
+        q_class = "status-warn";
+        q_title = "2级: 轻度过阻尼 (瞬态迅速 / 中低频量感偏弱)";
+        q_desc = "系统阻尼偏高，腔体气垫约束力处于偏弱状态。系统瞬态响应迅速，余振衰减较快，声尾利落。但在无声学补偿的情况下，中低频衔接段（150Hz-300Hz）的能量释放略显不足，声音在主观平衡度上偏向于冷调与克制。系统安全性良好，但在未进行低分频衔接修正时，中低音过渡段易产生凹陷。";
+    }
+    else if (qtc <= 0.75) {
+        q_class = "status-safe";
+        q_title = "3级: 标准平坦阻尼 (高保真理论平衡点)";
+        q_desc = "电声参数与空气阻尼处于理论最优平衡区间（接近经典巴特沃斯 0.707 响应）。系统频响曲线最趋近于平直直顺，阻抗与相位曲线无异常突变点。低频下潜截止点与瞬态收敛速度达到最佳物理平衡，余振控制合理，无多余声染色。";
+    }
+    else if (qtc <= 0.85) {
+        q_class = "status-safe";
+        q_title = "4级: 轻度欠阻尼 (能量聚焦 / 位移约束良好)";
+        q_desc = "腔体气垫效应开始显现，空气弹簧为振膜提供了良好的物理力学支撑，动态位移受控。中低频段能量感适度聚集，中音基础声频段能量密度有所提高。虽然在谐振频点附近频响有微幅抬升，但仍在人耳声学掩蔽的自然过渡范围内。";
+    }
+    else if (qtc <= 1.00) {
+        q_class = "status-warn";
+        q_title = "5级: 中度欠阻尼 (车载空间妥协区间)";
+        q_desc = "箱体等效容积因安装空间受限受到压缩，腔体气压偏高，系统 Q 值进入紧凑区。系统谐振频率（Fc）上移，并在该频点附近（通常在 180Hz-300Hz）产生明显的频响隆起。单元由于空气反向压力变大，大冲程下极难拍边，但瞬态尾音收敛变慢，产生轻微的声能堆积。建议配合 DSP 窄带衰减（EQ 修正）以恢复频响平坦度。";
+    }
+    else if (qtc <= 1.20) {
+        q_class = "status-danger";
+        q_title = "6级: 重度欠阻尼 (声学谐振偏高 / 空腔失真增加)";
+        q_desc = "腔体等效容积严重不足，空气弹簧过硬，过度限制了单元在谐振点附近的运动自由度。频响曲线在截止频率处出现 2dB-4dB 的谐振峰。瞬态响应恶化，余振产生拖尾效应，导致中低音声部混浊，并产生明显的空腔共振染色，易诱发门板内饰件的二次共振。";
+    }
+    else {
+        q_class = "status-danger";
+        q_title = "7级: 极度欠阻尼 (系统声学失效)";
+        q_desc = "腔体物理容积离开合理物理区间，系统阻尼完全失衡，空气压力过度抑制振膜位移。谐振点处频响产生极大的异常波峰，低频下潜大幅度滑落，能量高度堆积在窄带谐振区，呈现严重的空腔杂音和狭窄的窄带音色。即使依靠 DSP 强行进行深度 EQ 降噪，也极难挽回失真和丢失的细节。";
+    }
+
+    let q_color = q_class === 'status-danger' ? '#c0392b' : (q_class === 'status-safe' ? '#27ae60' : '#f39c12');
 
     document.getElementById('qtc_eval').className = "section " + q_class;
     document.getElementById('qtc_eval').innerHTML = `
         <h4>声学响应特性 (Qtc) <span class="tag">System Response</span></h4>
         <div class="data-row">
-            <div class="main-val" style="color:${q_class === 'status-danger' ? '#e74c3c' : (q_class === 'status-safe' ? '#27ae60' : '#f39c12')}">${qtc.toFixed(3)}</div>
+            <div class="main-val" style="color:${q_color}">${qtc.toFixed(3)}</div>
             <div class="sub-data">
                 Fc: <b>${Math.round(fc)} Hz</b><br>
                 V_net: <b>${v_net.toFixed(2)} L</b>
             </div>
         </div>
-        <div class="desc-text"><span class="desc-title">${q_title}</span></div>
+        <div class="desc-text">
+            <span class="desc-title" style="color:${q_color}">${q_title}</span>
+            <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 6px; line-height: 1.45;">${q_desc}</div>
+        </div>
     `;
 
     // --- 2. DSP 策略重构 (加入详细斜率与听感说明) ---
@@ -365,13 +401,25 @@ function calculate() {
     const cap = (val) => Math.round(Math.max(0, Math.min(100, val)));
     renderRadar([cap(s_transient), cap(s_lf), cap(s_power), cap(s_flatness), cap(s_synergy)]);
 
-    // 标签系统重构
-    let tags =[];
-    if(qtc > 1.0) tags.push({t:"高压抗冲程", c:"#2980b9"});
-    if(cap(s_lf) < 60) tags.push({t:"下潜严重受限", c:"#c0392b"});
-    if(cap(s_transient) >= 85) tags.push({t:"监听级瞬态", c:"#27ae60"});
-    if(qtc < 0.65) tags.push({t:"动态保护偏弱", c:"#f39c12"});
-    if(qtc > 0.85 && qtc <= 1.1) tags.push({t:"车载妥协级", c:"#f39c12"});
+    // 标签系统重构 (V33.0 替换为纯客观技术标签)
+    let tags = [];
+    if (qtc < 0.50) {
+        tags.push({t:"物理约束失效", c:"#c0392b"});
+    } else if (qtc < 0.65) {
+        tags.push({t:"位移约束偏弱", c:"#f39c12"});
+    }
+    if (qtc >= 0.65 && qtc <= 0.75) {
+        tags.push({t:"时域收敛合理", c:"#27ae60"});
+    }
+    if (qtc >= 0.75 && qtc <= 0.85) {
+        tags.push({t:"气垫力学保护", c:"#27ae60"});
+    }
+    if (qtc > 0.85 && qtc <= 1.00) {
+        tags.push({t:"中低频窄带隆起", c:"#f39c12"});
+    }
+    if (qtc > 1.00) {
+        tags.push({t:"高能声学谐振峰", c:"#c0392b"});
+    }
     
     document.getElementById('tag_cloud').innerHTML = tags.map(t => `<span class="sound-tag" style="background:${t.c}">${t.t}</span>`).join('');
 
@@ -395,22 +443,22 @@ function calculate() {
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">🚫</div>
-                <div><b>物理空间严重受限：</b>当前容积对该单元而言极小（Qtc=${qtc.toFixed(2)}），产生了过硬的空气弹簧，Fc 被推高至 ${Math.round(fc)}Hz。声音会发紧、干瘪且伴随明显的共振轰头感，强行靠 DSP 切除低频会导致声场变薄，不建议直接施工倒模。</div>
+                <div><b>等效容积高度受限：</b>当前容积对该单元而言过小（Qtc=${qtc.toFixed(2)}），造成了高刚度的空气反力，Fc 谐振点被推高至 ${Math.round(fc)}Hz。频响在谐振点附近存在声学隆起，余振衰减变慢且由于能量过度堆积易诱发车门空腔共振，强行通过高阶 DSP 降频切除低频会导致过渡频段能量凹陷，不建议直接采用当前的绝对密闭倒模方案。</div>
             </div>`;
         if (v_cad_085 > 0) {
             verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">👉</div>
-                <div style="color:var(--safe)"><b>方案调整指引：</b>建议修改倒模设计以增加净容积。若要达到车载标准的可接受弹力边界（Qtc≈0.85），<b>参考目标体积至少需约 ${targetText085}</b>。若物理空间绝对受限无法扩容，建议直接更换 Vas 或 Qts 更低的中音单元。</div>
+                <div style="color:var(--safe)"><b>方案调整指引：</b>建议修改倒模设计以增加净容积。若要达到车载阻尼平衡上限（Qtc≈0.85），<b>参考目标体积至少需约 ${targetText085}</b>。若物理空间绝对受限无法扩容，建议更换 Vas 或 Qts 更低的中音单元。</div>
             </div>`;
         }
         if (qts > 0.6) {
             verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">💡</div>
-                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>由于该单元天然高 Qts（${qts}），小容积导致严重欠阻尼。若体积已达物理极限无法扩容，强烈建议放弃绝对密封，改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
-                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度阻尼材料（如羊毛毡、压缩白棉）紧密覆盖，形成声学流阻以释放气压，强制将 Qtc 拉回平滑区间。<br>
-                <b>注意：</b>泄露的背波严禁直排入易共振的饰板空腔内，且 DSP 高通必须严格设置在 Fc 以上。</span></div>
+                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>由于该单元天然高 Qts（${qts}），小容积导致严重欠阻尼。若体积已达物理极限无法扩容，建议放弃绝对密封，改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
+                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度流阻阻尼材料（如羊毛毡、压缩白棉）紧密覆盖，形成声学流阻以释放空气压力，强制降低系统阻尼因数。<br>
+                <b>注意：</b>泄露的声波能量严禁直排入易共振的饰板空腔内，且 DSP 高通必须严格设置在 Fc 以上。</span></div>
             </div>`;
         }
     } 
@@ -418,22 +466,22 @@ function calculate() {
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">📊</div>
-                <div><b>典型车载妥协容积：</b>系统阻尼偏强（Qtc=${qtc.toFixed(2)}）。这是一个兼顾视线与声学的实战级妥协容积。内部高气压让喇叭获得了极佳的机械控制力，极难拍边损坏。但频响在 ${Math.round(fc)}Hz 附近必然存在凸起，<b>施工可行，但高度依赖 DSP 的 EQ 进行压制衰减</b>。</div>
+                <div><b>车载工程妥协容积：</b>系统阻尼偏弱，阻尼因数（Qtc=${qtc.toFixed(2)}）处于车载应用中常见的空间妥协区间。内部高气压限制了单元在大信号下的物理冲程，具有良好的物理控制力，防止单元过载拍边。但在谐振点 ${Math.round(fc)}Hz 附近频响曲线存在能量堆积，<b>方案可行，但高度依赖 DSP 窄带 EQ 衰减进行平坦度校正</b>。</div>
             </div>`;
         if (v_cad_0707 > 0) {
             verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">👉</div>
-                <div style="color:var(--safe)"><b>进阶方案指引：</b>若您对声音的宽松度和下潜深度有苛刻要求，可尝试将容积进一步扩大至 <b>${targetText0707} 左右</b>，以获得无需 EQ 强行介入的自然听感。</div>
+                <div style="color:var(--safe)"><b>进阶方案指引：</b>若对频响自然度及过渡段保真度有严格工程要求，可尝试将容积进一步扩大至 <b>${targetText0707} 左右</b>，以获得无需破坏性 EQ 介入的平直阶跃响应。</div>
             </div>`;
         }
         if (qts > 0.6 && qtc > 1.0) {
             verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">💡</div>
-                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>当前单元属于高 Qts（${qts}）设计。若想消除声学紧绷感且无法扩容，建议改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
-                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度阻尼材料紧密覆盖，利用声学流阻强制降低系统 Qtc。<br>
-                <b>注意：</b>泄露的声能需妥善疏导避免引起塑料件共振，DSP 高通切忌设置过低。</span></div>
+                <div><b style="color:var(--info)">专家级结构对策（AP泄压箱）：</b>当前单元属于高 Qts（${qts}）设计。若需消除声学共振且物理空间无法扩容，建议改用<b>非周期性阻尼设计（Aperiodic Enclosure）</b>。<br>
+                <span style="font-size: 0.85rem; color: #bdc3c7; display: block; margin-top: 5px;"><b>操作指引：</b>在箱体开设泄压孔（面积约为振膜面积的 15%-30%），并用高密度流阻阻尼材料紧密覆盖，利用声学流阻降低系统等效 Qtc。<br>
+                <b>注意：</b>泄露的声能需妥善疏导避免引起车门内部件机械共振，DSP 物理切频斜率切忌设置过低。</span></div>
             </div>`;
         }
     }
@@ -441,25 +489,25 @@ function calculate() {
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">🏆</div>
-                <div><b>声学黄金箱体：</b>极佳的电声物理配比（Qtc=${qtc.toFixed(2)}）。空气弹簧软硬适中，频响自然平坦，下潜深且瞬态表现优异。基本无需做破坏性的 EQ 补偿，单元可以发出宽松、舒展、无压迫感的声音。</div>
+                <div><b>高保真物理箱体：</b>电声物理配比优异（Qtc=${qtc.toFixed(2)}）。空气阻尼分布合理，系统频响输出平坦，低频下潜与阶跃响应瞬态表现达到最优物理平衡。该状态下无需大范围进行破坏性的 EQ 参数补偿，单元原有的频响与相位特质得以良好体现。</div>
             </div>`;
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">⚠️</div>
-                <div style="color:var(--warn)"><b>配套调音提示：</b>由于箱体空气阻力处于标准状态，大动态时振膜冲程释放较为彻底。在 DSP 调音时，高通滤波器（HPF）建议设置在 <b>${mech_hz}Hz 到 ${rec_hz}Hz 之间</b>，具体视选择的分频斜率与实际听感而定，切忌设置过低。</div>
+                <div style="color:var(--warn)"><b>配套调音提示：</b>由于箱内反向空气压力释放合理，单元机械冲程处于标准释出状态。在 DSP 调音时，高通滤波器（HPF）建议设置在 <b>${mech_hz}Hz 到 ${rec_hz}Hz 之间</b>，具体视选择的分频斜率与实际频响曲线而定，切忌设置过低。</div>
             </div>`;
     }
     else {
         verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">⚠️</div>
-                <div><b>容积偏大 / 保护不足：</b>当前容积过大（Qtc=${qtc.toFixed(2)}），低频测试数据虽好，但丧失了空气弹簧的物理约束力。在大动态交响乐或电音环境下，单元有极高的冲程过载（拍边）风险，声音收敛速度也会稍显拖泥带水。</div>
+                <div><b>容积过大 / 力学约束不足：</b>当前腔体容积过大，导致阻尼因数（Qtc=${qtc.toFixed(2)}）偏低。虽然低频频响过渡平缓，但系统失去了空气弹簧对单元的大信号位移保护。在大动态、强信号输入状态下，单元物理冲程存在极大的过载过偏（拍边）风险，时域余振衰减时间也会相应拉长。</div>
             </div>`;
         if (v_cad_0707 > 0) {
             verdict_html += `
             <div class="verdict-item">
                 <div class="verdict-icon">👉</div>
-                <div style="color:var(--safe)"><b>方案调整指引：</b>建议通过在箱体内填入实心木块或注入适量树脂来主动减小容积。<b>参考最佳体积约为 ${targetText0707} 左右</b>，让机械控制力回归至理想区间。</div>
+                <div style="color:var(--safe)"><b>方案调整指引：</b>建议通过在箱体内填入实心块或注入等量树脂来物理压缩等效容积。<b>参考目标体积约为 ${targetText0707} 左右</b>，使物理位移约束力恢复至安全力学区间。</div>
             </div>`;
         }
     }
