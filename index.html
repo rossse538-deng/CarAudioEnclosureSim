@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>车载中音单元逆向分析 V33.0 (高颗粒度客观版)</title>
+    <title>车载中音单元逆向分析 V36.0 (客观定量工程版)</title>
     <!-- 引入截图功能库与图表库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -97,6 +97,40 @@
         
         .watermark { text-align: center; color: #666; font-size: 0.75rem; margin-top: 25px; border-top: 1px solid #444; padding-top: 15px; display: none; font-family: 'Consolas', monospace; }
         .copyright { font-weight: bold; color: #888; margin-bottom: 5px; display: block; }
+
+        /* 开关样式 */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 4px;
+            border: 1px dashed var(--border);
+        }
+        .toggle-container input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            margin: 0;
+        }
+        .toggle-label {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .hidden-panel {
+            display: none;
+            grid-column: span 2;
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.2);
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -104,7 +138,7 @@
 <div id="capture-target" class="capture-wrapper">
     <div class="card">
         <h2>车载中音单元逆向分析系统</h2>
-        <span class="version">V33.0 Acoustic Matrix</span>
+        <span class="version">V36.0 Acoustic Matrix</span>
         
         <div class="section-title">1. 逆向容积与声学条件</div>
         <div class="input-grid">
@@ -118,12 +152,12 @@
                 <input type="number" id="v_driver" value="0.10" step="0.01" oninput="updateCottonHint()">
             </div>
             <div class="input-group" style="grid-column: span 2;">
-                <label>声学填充方案 (影响等效容积)</label>
+                <label>声学填充方案 (等效容积与阻尼调节)</label>
                 <select id="fill_mode" onchange="updateCottonHint()">
-                    <option value="1.0">🈳 方案A: 纯空箱 (无任何填充)</option>
-                    <option value="1.06">🌊 方案B: 仅贴壁 (波浪棉/止震板)</option>
-                    <option value="1.12" selected>☁️ 方案C: 标准填充 (白棉蓬松填满)</option>
-                    <option value="1.16">🧶 方案D: 高密填充 (白棉用力压实)</option>
+                    <option value="1.0">🈳 方案A: 纯空箱 (无物理和机械变化)</option>
+                    <option value="1.06">🌊 方案B: 仅贴壁 (容积+6% / 阻尼系数Q_loss=0.98)</option>
+                    <option value="1.12" selected>☁️ 方案C: 标准填充 (容积+12% / 阻尼系数Q_loss=0.94)</option>
+                    <option value="1.16">🧶 方案D: 高密填充 (容积+16% / 阻尼系数Q_loss=0.90)</option>
                 </select>
                 <div class="tip" id="cotton_hint">建议准备约 3g~5g 吸音棉。</div>
             </div>
@@ -143,18 +177,37 @@
             <div><label>Vas (L)</label><input type="number" id="vas" value="1.1" step="0.1"></div>
             <div><label>Qts</label><input type="number" id="qts" value="0.36" step="0.01"></div>
             <div style="grid-column: span 2;"><label>Fs (Hz)</label><input type="number" id="fs" value="91"></div>
+            
+            <!-- 大信号检验开关 -->
+            <div class="input-group" style="grid-column: span 2;">
+                <div class="toggle-container">
+                    <input type="checkbox" id="enable_large_signal" onchange="toggleLargeSignalPanel()">
+                    <label for="enable_large_signal" class="toggle-label">开启大信号物理极限校验 (输入阻抗、功率与冲程参数)</label>
+                </div>
+            </div>
+
+            <!-- 隐藏的大信号参数面板 -->
+            <div id="large_signal_panel" class="hidden-panel">
+                <div class="input-grid" style="margin-bottom:0;">
+                    <div><label>Xmax 单向线性位移 (mm)</label><input type="number" id="xmax" value="3.0" step="0.5"></div>
+                    <div><label>Sd 有效振动面积 (cm²)</label><input type="number" id="sd" value="32" step="1"></div>
+                    <div><label>Re 直流电阻 (Ω)</label><input type="number" id="re" value="3.6" step="0.1"></div>
+                    <div><label>Pe 额定输入功率 (W)</label><input type="number" id="pe" value="30" step="5"></div>
+                </div>
+            </div>
         </div>
         
         <div class="section-title">3. 结构工艺参数</div>
         <div class="input-grid">
             <div><label>打印壁厚 (mm)</label><input type="number" id="wall" value="3.5" step="0.1"></div>
-            <div>
+            <div><label>面板最大跨度 a (mm)</label><input type="number" id="span_a" value="120" step="5"></div>
+            <div style="grid-column: span 2;">
                 <label>材料物理属性</label>
                 <select id="material">
-                    <option value="1.0">PLA/PETG (中等模量)</option>
-                    <option value="1.3" selected>ASA/ABS (工程常用)</option>
-                    <option value="1.6">ASA/ABS 100% 实心</option>
-                    <option value="1.9">CF-Nylon (高模量)</option>
+                    <option value="PLA">PLA (E=3.5GPa, ρ=1240kg/m³)</option>
+                    <option value="PETG">PETG (E=2.0GPa, ρ=1270kg/m³)</option>
+                    <option value="ASA" selected>ASA/ABS (E=2.2GPa, ρ=1070kg/m³)</option>
+                    <option value="CFNylon">CF-Nylon (E=8.0GPa, ρ=1400kg/m³)</option>
                 </select>
             </div>
             <div style="grid-column: span 2;">
@@ -217,6 +270,11 @@
 <script>
 let myRadarChart = null;
 
+function toggleLargeSignalPanel() {
+    const isChecked = document.getElementById('enable_large_signal').checked;
+    document.getElementById('large_signal_panel').style.display = isChecked ? 'block' : 'none';
+}
+
 function updateCottonHint() {
     let v_cad = parseFloat(document.getElementById('v_cad').value);
     let v_driver = parseFloat(document.getElementById('v_driver').value);
@@ -226,13 +284,13 @@ function updateCottonHint() {
     
     if(v_net <= 0) { hint.innerHTML = "净容积不足"; return; }
 
-    if(mode == "1.12") {
+    if(mode === "1.12") {
         let g = Math.round(v_net * 12); 
         hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：建议准备约 ${g}g ~ ${g+2}g 吸音棉，均匀蓬松填入。</span>`;
-    } else if (mode == "1.16") {
+    } else if (mode === "1.16") {
         let g = Math.round(v_net * 25); 
         hint.innerHTML = `<span class="hint-dynamic">ℹ️ 操作指南：建议准备约 ${g}g ~ ${g+4}g 吸音棉，需用力压实填入。</span>`;
-    } else if (mode == "1.06") {
+    } else if (mode === "1.06") {
         hint.innerHTML = "ℹ️ 操作指南：仅在内壁粘贴波浪棉或止震板，中间留空。";
     } else {
         hint.innerHTML = "ℹ️ 操作指南：箱体内部保持空腔，不填充。";
@@ -242,22 +300,42 @@ function updateCottonHint() {
 function calculate() {
     const v_cad = parseFloat(document.getElementById('v_cad').value);
     const v_driver = parseFloat(document.getElementById('v_driver').value);
-    const fill_gamma = parseFloat(document.getElementById('fill_mode').value);
+    
+    // 多孔材质热力学/机械阻尼损耗拆分
+    const fill_mode = document.getElementById('fill_mode').value;
+    let fill_V_increase = 1.0;
+    let fill_Q_loss = 1.0;
+    if (fill_mode === "1.0") {
+        fill_V_increase = 1.0;
+        fill_Q_loss = 1.0;
+    } else if (fill_mode === "1.06") {
+        fill_V_increase = 1.06;
+        fill_Q_loss = 0.98;
+    } else if (fill_mode === "1.12") {
+        fill_V_increase = 1.12;
+        fill_Q_loss = 0.94;
+    } else if (fill_mode === "1.16") {
+        fill_V_increase = 1.16;
+        fill_Q_loss = 0.90;
+    }
     
     const d_size = parseFloat(document.getElementById('driver_size').value);
     const vas = parseFloat(document.getElementById('vas').value);
     const qts = parseFloat(document.getElementById('qts').value);
     const fs = parseFloat(document.getElementById('fs').value);
 
+    // 结构工艺参数
     const wall = parseFloat(document.getElementById('wall').value);
-    const mat_modulus = parseFloat(document.getElementById('material').value);
+    const span_a = parseFloat(document.getElementById('span_a').value);
+    const mat_type = document.getElementById('material').value;
     const tech_val = parseFloat(document.getElementById('special_tech').value);
 
     const v_net = v_cad - v_driver;
     if (v_net <= 0) { alert("逻辑错误：净容积不能小于或等于喇叭排开体积。"); return; }
     
-    const v_eff = v_net * fill_gamma;
-    const qtc = qts * Math.sqrt((vas / v_eff) + 1);
+    const v_eff = v_net * fill_V_increase;
+    // 整合阻尼损耗修正系统的 Qtc 估算
+    const qtc = qts * Math.sqrt((vas / v_eff) + 1) * fill_Q_loss;
     const fc = fs * (qtc / qts);
 
     document.getElementById('res').style.display = 'block';
@@ -272,42 +350,77 @@ function calculate() {
     else if (d_size === 3.5) { safe_hz = 200; }
     else { safe_hz = 150; }
 
-    // --- 1. Qtc 评估 (V33.0 7级客观分析重构) ---
+    // --- 3.3 峰值阻尼计算修正 (只针对 Qtc > 0.707 计算物理隆起) ---
+    let peak_db = 0;
+    if (qtc > 0.707) {
+        peak_db = 20 * Math.log10(qtc / 0.707);
+    }
+    const bw_val = qtc > 0 ? (fc / qtc) : 0;
+
+    // --- 1. Qtc 评估 (7级客观分析) & 可选大信号极限位移校验 ---
+    let limit_info_html = "";
+    let thermo_info_html = "";
+    const isLargeSignalEnabled = document.getElementById('enable_large_signal').checked;
+
+    if (isLargeSignalEnabled) {
+        // 读取大信号校验参数
+        const xmax = parseFloat(document.getElementById('xmax').value);
+        const sd = parseFloat(document.getElementById('sd').value);
+        const re = parseFloat(document.getElementById('re').value);
+        const pe = parseFloat(document.getElementById('pe').value);
+
+        const eg = Math.sqrt(pe * re); // 额定电压
+        // 引入 Qtc 系统谐振倍置放大计算极限位移
+        const x_fc = (50 * eg * qtc * sd) / (Math.PI * fc * vas * re);
+        const x_max_limit = xmax * 0.8;
+        const x_danger = x_fc > x_max_limit;
+
+        if (x_danger) {
+            limit_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 振膜位移过载预警: 额定电压下 F_c 处最大振幅估计为 ${x_fc.toFixed(2)}mm，超过了 80% 安全限值 (${x_max_limit.toFixed(2)}mm)。</div>`;
+        } else {
+            limit_info_html = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 大信号位移安全: F_c 处预估振幅为 ${x_fc.toFixed(2)}mm，低于安全警戒线 (${x_max_limit.toFixed(2)}mm)。</div>`;
+        }
+
+        if (qtc > 1.0) {
+            thermo_info_html = `<div style="color:var(--warn); font-size:0.8rem; margin-top:4px;">⚠️ 功率压缩警告: 由于声腔过于紧凑，热功耗难以散逸。长时间高动态播放可能引起温升并产生约 3dB 的动态压缩。</div>`;
+        }
+    }
+
     let q_class = "", q_title = "", q_desc = "";
     if (qtc < 0.50) {
         q_class = "status-danger";
         q_title = "1级: 深度过阻尼 (声能下潜严重受限)";
-        q_desc = "系统总阻尼过高。由于腔体等效容积过大，空气弹簧（气垫效应）形同虚设，无法对振膜提供物理位移约束。低频下潜截止频率明显偏高，中低频段（100Hz-250Hz）能量衰减过快。在大信号输入时，因缺乏气垫阻尼保护，振膜冲程极易超出安全物理极限，导致物理撞摆或拍边损坏。";
+        q_desc = "系统总阻尼过高。由于腔体等效容积过大，空气弹簧（气垫效应）形同虚设，无法对振膜提供物理位移约束。低频下潜截止频率明显偏高，中低频段（100Hz-250Hz）能量衰减过快。在大信号输入时，因缺乏气垫阻尼保护，振膜冲程极易超出安全物理极限。";
     } 
     else if (qtc < 0.65) {
         q_class = "status-warn";
         q_title = "2级: 轻度过阻尼 (瞬态迅速 / 中低频量感偏弱)";
-        q_desc = "系统阻尼偏高，腔体气垫约束力处于偏弱状态。系统瞬态响应迅速，余振衰减较快，声尾利落。但在无声学补偿的情况下，中低频衔接段（150Hz-300Hz）的能量释放略显不足，声音在主观平衡度上偏向于冷调与克制。系统安全性良好，但在未进行低分频衔接修正时，中低音过渡段易产生凹陷。";
+        q_desc = "系统阻尼偏高，腔体气垫约束力处于偏弱状态。系统瞬态响应迅速，余振衰减较快，声尾利落。但在无声学补偿的情况下，中低频衔接段（150Hz-300Hz）的能量释放略显不足，声音在主观平衡度上偏向于冷调与克制。";
     }
     else if (qtc <= 0.75) {
         q_class = "status-safe";
         q_title = "3级: 标准平坦阻尼 (高保真理论平衡点)";
-        q_desc = "电声参数与空气阻尼处于理论最优平衡区间（接近经典巴特沃斯 0.707 响应）。系统频响曲线最趋近于平直直顺，阻抗与相位曲线无异常突变点。低频下潜截止点与瞬态收敛速度达到最佳物理平衡，余振控制合理，无多余声染色。";
+        q_desc = "电声参数与空气阻尼处于理论最优平衡区间（接近经典巴特沃斯 0.707 响应）。系统频响曲线最趋近于平直直顺，阻抗与相位曲线无异常突变点。低频下潜截止点与瞬态收敛速度达到最佳物理平衡。";
     }
     else if (qtc <= 0.85) {
         q_class = "status-safe";
         q_title = "4级: 轻度欠阻尼 (能量聚焦 / 位移约束良好)";
-        q_desc = "腔体气垫效应开始显现，空气弹簧为振膜提供了良好的物理力学支撑，动态位移受控。中低频段能量感适度聚集，中音基础声频段能量密度有所提高。虽然在谐振频点附近频响有微幅抬升，但仍在人耳声学掩蔽的自然过渡范围内。";
+        q_desc = "腔体气垫效应开始显现，空气弹簧为振膜提供了良好的物理力学支撑，动态位移受控。中低频段能量感适度聚集，中音基础声频段能量密度有所提高。";
     }
     else if (qtc <= 1.00) {
         q_class = "status-warn";
         q_title = "5级: 中度欠阻尼 (车载空间妥协区间)";
-        q_desc = "箱体等效容积因安装空间受限受到压缩，腔体气压偏高，系统 Q 值进入紧凑区。系统谐振频率（Fc）上移，并在该频点附近（通常在 180Hz-300Hz）产生明显的频响隆起。单元由于空气反向压力变大，大冲程下极难拍边，但瞬态尾音收敛变慢，产生轻微的声能堆积。建议配合 DSP 窄带衰减（EQ 修正）以恢复频响平坦度。";
+        q_desc = "箱体等效容积因安装空间受限受到压缩，腔体气压偏高，系统 Q 值进入紧凑区。系统谐振频率（Fc）上移，并在该频点附近（通常在 180Hz-300Hz）产生明显的频响隆起。建议配合 DSP 窄带衰减（EQ 修正）以恢复频响平坦度。";
     }
     else if (qtc <= 1.20) {
         q_class = "status-danger";
         q_title = "6级: 重度欠阻尼 (声学谐振偏高 / 空腔失真增加)";
-        q_desc = "腔体等效容积严重不足，空气弹簧过硬，过度限制了单元在谐振点附近的运动自由度。频响曲线在截止频率处出现 2dB-4dB 的谐振峰。瞬态响应恶化，余振产生拖尾效应，导致中低音声部混浊，并产生明显的空腔共振染色，易诱发门板内饰件的二次共振。";
+        q_desc = "腔体等效容积严重不足，空气弹簧过硬，过度限制了单元在谐振点附近的运动自由度。频响曲线在截止频率处出现 2dB-4dB 的谐振峰。瞬态响应恶化，余振产生拖尾效应。";
     }
     else {
         q_class = "status-danger";
         q_title = "7级: 极度欠阻尼 (系统声学失效)";
-        q_desc = "腔体物理容积离开合理物理区间，系统阻尼完全失衡，空气压力过度抑制振膜位移。谐振点处频响产生极大的异常波峰，低频下潜大幅度滑落，能量高度堆积在窄带谐振区，呈现严重的空腔杂音和狭窄的窄带音色。即使依靠 DSP 强行进行深度 EQ 降噪，也极难挽回失真和丢失的细节。";
+        q_desc = "腔体物理容积离开合理物理区间，系统阻尼完全失衡，空气压力过度抑制振膜位移。谐振点处频响产生极大的异常波峰，低频下潜大幅度滑落，呈现严重的空腔杂音和狭窄的窄带音色。";
     }
 
     let q_color = q_class === 'status-danger' ? '#c0392b' : (q_class === 'status-safe' ? '#27ae60' : '#f39c12');
@@ -319,89 +432,113 @@ function calculate() {
             <div class="main-val" style="color:${q_color}">${qtc.toFixed(3)}</div>
             <div class="sub-data">
                 Fc: <b>${Math.round(fc)} Hz</b><br>
-                V_net: <b>${v_net.toFixed(2)} L</b>
+                Q_peak: <b>+${peak_db.toFixed(2)} dB</b><br>
+                带宽 (Bw): <b>${Math.round(bw_val)} Hz</b>
             </div>
         </div>
         <div class="desc-text">
             <span class="desc-title" style="color:${q_color}">${q_title}</span>
             <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 6px; line-height: 1.45;">${q_desc}</div>
+            ${limit_info_html}
+            ${thermo_info_html}
         </div>
     `;
 
-    // --- 2. DSP 策略重构 (加入详细斜率与听感说明) ---
-    // 严谨声学标准：1.5倍Fc为临界下限，2.0倍Fc为高保真推荐
+    // --- 2. DSP 策略 ---
     let mech_hz = Math.max(Math.round(fc * 1.5), safe_hz); 
     let rec_hz = Math.max(Math.round(fc * 2.0), safe_hz);
 
     let eq_hint = "";
-    if (qtc > 0.85) {
-        let peak_db = Math.max(1, Math.round(20 * Math.log10(qtc)));
-        eq_hint = `<br><span style="color:var(--warn); margin-top:4px; display:inline-block; font-weight:600;">🎛️ EQ预判：需在 ${Math.round(fc)}Hz 附近做约 -${peak_db}dB 的衰减。</span>`;
+    if (qtc > 0.707) {
+        eq_hint = `<br><span style="color:var(--warn); margin-top:4px; display:inline-block; font-weight:600;">🎛️ EQ预判：需在 ${Math.round(fc)}Hz 附近做约 -${peak_db.toFixed(1)}dB 的窄带衰减补偿。</span>`;
     } else {
-        eq_hint = `<br><span style="color:var(--text-sub); margin-top:4px; display:inline-block;">🎛️ EQ预判：频响平直，无需针对箱体做破坏性补偿。</span>`;
+        eq_hint = `<br><span style="color:var(--text-sub); margin-top:4px; display:inline-block;">🎛️ EQ预判：频响表现平坦，无需专门做箱体谐振隆起补偿。</span>`;
     }
 
     document.getElementById('dsp_eval').className = "section status-safe";
     document.getElementById('dsp_eval').innerHTML = `
-        <h4>DSP 分频策略建议 <span class="tag">Crossover Strategy</span></h4>
+        <h4>DSP 分频与 EQ 策略参考建议 <span class="tag" style="background:#d35400; color:white;">🚨 自由声场基准</span></h4>
         <div class="dual-advice">
             <div class="da-card" style="border-color:#c0392b">
-                <div class="da-title">🛑 临界工作下限 (1.5x Fc)</div>
+                <div class="da-title">🛑 物理工作极限下限 (1.5x Fc)</div>
                 <div class="da-val" style="color:#e74c3c">${mech_hz} Hz <span style="font-size:0.85rem; color:#bdc3c7;">/ 建议 ≥24dB/Oct</span></div>
-                <div class="da-desc">该频点刚脱离物理冲程危险区，但仍受谐振阻抗影响。<b>必须强制使用高阶陡峭斜率（如 24dB 甚至 36dB）</b>切断低频。听感上声音偏硬朗，通常仅在门板中低音实力较弱、无法向上延伸时妥协采用。</div>
+                <div class="da-desc">该频点刚脱离物理冲程危险区，但仍受谐振阻抗影响。<b>必须强制使用高阶陡峭斜率（如 24dB 甚至 36dB）</b>切断低频。</div>
             </div>
             <div class="da-card" style="border-color:var(--neutral); background:rgba(41, 128, 185, 0.1);">
                 <div class="da-title">🎧 高保真推荐点 (2.0x Fc)</div>
                 <div class="da-val" style="color:#3498db">${rec_hz} Hz <span style="font-size:0.85rem; color:#bdc3c7;">/ 建议 12~24dB/Oct</span></div>
-                <div class="da-desc">该频点已彻底避开阻抗与相位突变区，互调失真（IMD）极低。<b>此时允许使用 12dB/Oct 等平缓斜率</b>。听感上瞬态绝佳、人声通透顺滑，能与门板中低音产生极度自然的频段融合。${eq_hint}</div>
+                <div class="da-desc">该频点已彻底避开阻抗与相位突变区，互调失真（IMD）极低。允许使用 12dB/Oct 等平缓斜率。听感上瞬态绝佳、人声通透顺滑。${eq_hint}</div>
             </div>
         </div>
-        <div style="font-size: 0.75rem; color: #95a5a6; margin-top: 15px; line-height: 1.5; border-top: 1px dashed var(--border); padding-top: 10px;">
-            <b>ℹ️ 客观调音声明：</b>以上分频点与斜率建议基于 T/S 参数与密闭箱声学物理模型计算（理想无限大障板环境）。在实际车内环境中，由于仪表台反射角（Horn Effect）、玻璃折射以及不同喇叭的离轴衰减特性，最终的交越频率、斜率组合及相位对齐，<b>严禁生搬硬套，务必使用 RTA 声学测试麦克风测量实际频响曲线，并以最终听感验证为准。</b>
+        <div style="font-size: 0.8rem; color: #e67e22; margin-top: 15px; line-height: 1.5; border-top: 1px dashed var(--border); padding-top: 10px; font-weight: bold;">
+            ⚠️ 重要技术声明（实车边界限制）：<br>
+            <span style="font-weight: normal; color: #bdc3c7;">以上分频点与 EQ 修正建议仅作为<b>“自由声场条件下的目标基准曲线（Target Curve）参考”</b>。在实车车内声学环境下，由于极其复杂的仪表台边角反射、挡风玻璃近距离镜面梳状滤波效应（Comb Filtering）以及单元离轴响应衰减，**实车 RTA 声学测试与专业调音师的主观重播验证是绝对不可替代的，切忌盲目照搬数值进行静态调调校。**</span>
         </div>
     `;
 
-    // --- 3. 结构评估 ---
+    // --- 3. 结构评估重构 (基于弹性模量/薄板谐振计算并引入 2.5 倍几何修正) ---
+    let E = 2.2e9; 
+    let rho = 1070; 
+    if (mat_type === 'PLA') { E = 3.5e9; rho = 1240; }
+    else if (mat_type === 'PETG') { E = 2.0e9; rho = 1270; }
+    else if (mat_type === 'ASA') { E = 2.2e9; rho = 1070; }
+    else if (mat_type === 'CFNylon') { E = 8.0e9; rho = 1400; }
+
+    const v_long = Math.sqrt(E / rho); // 纵向声速
+    const t_m = wall / 1000;
+    const a_m = span_a / 1000;
+    // 薄板弯曲刚度自振基频计算 + 弧形/双曲面几何强化修正系数 2.5
+    const f_panel = 0.45 * v_long * (t_m / (a_m * a_m)) * 2.5;
+
     let vol_penalty = Math.pow(v_cad, 0.3); 
     let load_factor = qtc / 0.7;
-    let strength_val = (Math.pow(wall, 1.8) * mat_modulus * tech_val) / vol_penalty;
+    // 刚性因子估算
+    let strength_val = (Math.pow(wall, 1.8) * (E / 1.5e9) * tech_val) / vol_penalty;
     let safety_ratio = strength_val / load_factor;
 
     let str_class = safety_ratio > 18 ? "status-safe" : (safety_ratio > 12 ? "status-warn" : "status-danger");
-    let str_status = safety_ratio > 30 ? "谐振风险：极低" : (safety_ratio > 18 ? "谐振风险：低" : (safety_ratio > 12 ? "谐振风险：中" : "谐振风险：高"));
-    let recommendations =[];
-
+    let str_status = safety_ratio > 30 ? "壳体刚性：极强 (自振干扰极低)" : (safety_ratio > 18 ? "壳体刚性：合格" : (safety_ratio > 12 ? "壳体刚性：中等 (存在一定共振风险)" : "壳体刚性：薄弱 (共振风险极高)"));
+    
+    let recommendations = [];
     if (safety_ratio <= 25) { 
-        if (mat_modulus < 1.3) recommendations.push("材料刚性偏低，建议更换为 ASA/ABS 或 碳纤维耗材。");
-        if (wall < 3.0) recommendations.push(`当前壁厚较薄，建议增加至 3.5mm 或以上。`);
-        else if (safety_ratio < 12) recommendations.push(`鉴于当前负载极大，建议壁厚增加至 ${(wall+1.0).toFixed(1)}mm。`);
-        if (tech_val < 1.9) recommendations.push("建议开启切片软件模糊表皮以增加刚性。");
-        if (tech_val < 2.2) recommendations.push("建议在内壁涂抹原子灰或专用阻尼胶，消除空腔反射。");
+        if (mat_type !== 'CFNylon' && E < 3e9) recommendations.push("板材弹性模量偏低，推荐更换为 CF-Nylon 耗材或 100% 填充。");
+        if (wall < 3.0) recommendations.push(`当前壁厚较薄，建议物理增加到至少 3.5mm。`);
+        if (tech_val < 1.9) recommendations.push("打印设置建议开启模糊表皮功能以增加表面结构物理阻尼。");
+    }
+    
+    // 自振频率与重放带判定
+    let resonance_warning = "";
+    if (f_panel >= 200 && f_panel <= 1500) {
+        str_class = "status-danger";
+        resonance_warning = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 面板自振基频重叠警告: 板件自振频率估算为 ${Math.round(f_panel)} Hz，正落入中音工作频带内！存在强烈的外壳共振声染色风险，建议使用高弹性模量耗材、增加壁厚或箱内壁涂抹阻尼胶。</div>`;
+    } else {
+        resonance_warning = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 机械谐振避让良好: 最低阶面板谐振点为 ${Math.round(f_panel)} Hz (已引入双曲面几何刚度 2.5× 物理增益修正)。</div>`;
     }
 
-    let str_html = `<h4>箱体结构评估及建议 <span class="tag">Structural Analysis</span></h4>`;
-    str_html += `<div class="data-row"><div class="main-val" style="font-size:1.4rem;">${str_status}</div></div>`;
+    let str_html = `<h4>箱体结构工艺与力学评估 <span class="tag">Structural Analysis</span></h4>`;
+    str_html += `<div class="data-row"><div class="main-val" style="font-size:1.3rem;">${str_status}</div></div>`;
+    str_html += resonance_warning;
     if (recommendations.length > 0) {
-        str_html += `<div class="rec-box"><span class="rec-title">📋 改进建议</span><ul class="rec-list">${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
+        str_html += `<div class="rec-box"><span class="rec-title">📋 物理改良建议</span><ul class="rec-list">${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
     } else {
-        str_html += `<div class="rec-ok">√ 结构设计合理，工艺配置恰当。</div>`;
+        str_html += `<div class="rec-ok" style="margin-top:10px;">√ 结构力学参数计算良好，自振偏离重播主带区。</div>`;
     }
+    
     document.getElementById('str_eval').className = "section " + str_class;
     document.getElementById('str_eval').innerHTML = str_html;
 
-    // --- 4. 纯声学雷达数据 (衔接度逻辑已彻底修正) ---
+    // --- 4. 纯声学雷达数据 ---
     let s_transient = 100 - Math.abs(qtc - 0.707) * 100;
     let s_lf = 100 - (fc / fs - 1) * 35;
     let s_power = qtc <= 1.0 ? (qtc / 1.0) * 100 : 100 - (qtc - 1.0) * 50;
-    let s_flatness = 100 - Math.abs(qtc - 0.707) * 80;
-    
-    // 【修正说明】只有当“物理极限下限(mech_hz)”被迫大幅度超越该喇叭的安全底线时，才会导致中低音接不上，此时才扣分。高保真推荐点高并不会影响衔接度得分。
+    // 频响平坦度关联至精确计算出的 peak_db 上
+    let s_flatness = 100 - peak_db * 15; 
     let s_synergy = 100 - Math.max(0, mech_hz - safe_hz) * 0.6;
 
     const cap = (val) => Math.round(Math.max(0, Math.min(100, val)));
     renderRadar([cap(s_transient), cap(s_lf), cap(s_power), cap(s_flatness), cap(s_synergy)]);
 
-    // 标签系统重构 (V33.0 替换为纯客观技术标签)
+    // 标签系统
     let tags = [];
     if (qtc < 0.50) {
         tags.push({t:"物理约束失效", c:"#c0392b"});
@@ -427,11 +564,11 @@ function calculate() {
     let v_cad_0707 = -1, v_cad_085 = -1;
     if (qts < 0.70) {
         let veff = vas / (Math.pow(0.707 / qts, 2) - 1);
-        v_cad_0707 = (veff / fill_gamma) + v_driver;
+        v_cad_0707 = (veff / fill_V_increase) + v_driver;
     }
     if (qts < 0.84) {
         let veff = vas / (Math.pow(0.85 / qts, 2) - 1);
-        v_cad_085 = (veff / fill_gamma) + v_driver;
+        v_cad_085 = (veff / fill_V_increase) + v_driver;
     }
 
     let targetText0707 = v_cad_0707 > 0 ? v_cad_0707.toFixed(2) + " L" : "（该单元Qts偏高，不适合此类工况）";
@@ -557,7 +694,7 @@ function takeScreenshot() {
     html2canvas(target, { backgroundColor: "#1a252f", scale: 2 }).then(canvas => {
         btns.style.display = 'grid'; 
         const link = document.createElement('a');
-        link.download = `车载声学评估报告_${new Date().toISOString().slice(0,10)}.png`;
+        link.download = `车载声学评估报告_V36_${new Date().toISOString().slice(0,10)}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     });
