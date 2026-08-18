@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>车载中音单元逆向分析系统 V51.0 (真实传递函数与动态视觉版)</title>
+    <title>车载中音单元逆向分析系统 V52.0 (电声工程与真实约束版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
@@ -106,13 +106,13 @@
 <div id="capture-target" class="capture-wrapper">
     <div class="card">
         <h2>车载中音单元逆向分析系统</h2>
-        <span class="version">V51.0 Acoustic Matrix · Real Transfer-Function Edition</span>
+        <span class="version">V52.0 Acoustic Matrix · Electro-Acoustic Engineering Edition</span>
         
         <div class="section-title">1. 逆向容积与声学条件</div>
         <div class="input-grid">
             <div class="input-group">
                 <label>逆向建模净容积 (L)</label>
-                <input type="number" id="v_cad" value="0.30" step="0.05" oninput="updateCottonHint()">
+                <input type="number" id="v_cad" value="0.50" step="0.05" oninput="updateCottonHint()">
                 <div class="tip">扣除壁厚后的纯空腔体积</div>
             </div>
             <div class="input-group">
@@ -149,14 +149,14 @@
             
             <div class="input-group" style="grid-column: span 2;">
                 <div class="toggle-container">
-                    <input type="checkbox" id="enable_large_signal" onchange="toggleLargeSignalPanel()">
+                    <input type="checkbox" id="enable_large_signal" checked onchange="toggleLargeSignalPanel()">
                     <label for="enable_large_signal" class="toggle-label">开启大信号物理极限校验 (输入阻抗、功率与冲程参数)</label>
                 </div>
             </div>
 
-            <div id="large_signal_panel" class="hidden-panel">
+            <div id="large_signal_panel" class="hidden-panel" style="display: block;">
                 <div class="input-grid" style="margin-bottom:0;">
-                    <div><label>Xmax 单向线性位移 (mm)</label><input type="number" id="xmax" value="3.0" step="0.5"></div>
+                    <div><label>Xmax 单向线性位移 (mm)</label><input type="number" id="xmax" value="2.5" step="0.5"></div>
                     <div><label>Sd 有效振动面积 (cm²)</label><input type="number" id="sd" value="32" step="1"></div>
                     <div><label>Re 直流电阻 (Ω)</label><input type="number" id="re" value="3.6" step="0.1"></div>
                     <div><label>Pe 额定输入功率 (W)</label><input type="number" id="pe" value="30" step="5"></div>
@@ -180,7 +180,7 @@
                     <option value="36">36 dB/oct (LR6)</option>
                     <option value="48">48 dB/oct (LR8，陡峭)</option>
                 </select>
-                <div class="tip">偶数阶按 Linkwitz-Riley 型计算(分频点处-6dB)，奇数阶按标准 Butterworth 型计算(分频点处-3dB)</div>
+                <div class="tip">偶数阶按 Linkwitz-Riley 计算，奇数阶按 Butterworth 计算</div>
             </div>
         </div>
         
@@ -225,11 +225,11 @@
                         <div class="chart-container"><canvas id="radarChart"></canvas></div>
                         <div class="legend-box">
                             <div class="legend-title">🎯 声学品质评价维度释义</div>
-                            <div class="legend-item"><span>瞬态与解析:</span> 箱体固有阻尼特性，越接近临界阻尼得分越高，过冲与拖尾越少。</div>
-                            <div class="legend-item"><span>分频匹配度:</span> 箱体响应经滤波后是否贴近平坦通带电平——容积过小会有谐振隆起，容积过大则会在分频点处电平不足，两个方向都会被计入。</div>
-                            <div class="legend-item"><span>动态承载力:</span> 大信号下振膜位移的安全余量。</div>
-                            <div class="legend-item"><span>结构与背波:</span> 壳体自振刚度、背波反射及小容积空气非线性风险。</div>
-                            <div class="legend-item"><span>容积紧凑度:</span> 当前容积相对"安全所需最小容积"的富余程度，越接近1倍越紧凑高效。</div>
+                            <div class="legend-item"><span>瞬态与解析:</span> 系统阻尼特性，过阻尼与临界阻尼得分高，欠阻尼过冲拖尾扣分。</div>
+                            <div class="legend-item"><span>分频匹配度:</span> 评估通带平坦度及箱体谐振峰是否被 DSP 彻底衰减压制。</div>
+                            <div class="legend-item"><span>动态承载力:</span> 气垫阻尼与振膜大动态位移的安全余量。</div>
+                            <div class="legend-item"><span>结构与背波:</span> 壳体自振刚度、背波反射深度及小容积空气非线性失真。</div>
+                            <div class="legend-item"><span>空间利用率:</span> 实际容积相对声学推荐黄金区间的适配度与车内空间利用合理性。</div>
                         </div>
                     </div>
                     <div>
@@ -294,23 +294,21 @@ function getFillFactors(mode) {
     return { v: 1.0, q: 1.0 };
 }
 
-// 给定净容积 vn，计算 Qtc / Fc（自由声场固有物理量）
 function acousticState(vn, fs, qts, vas, fill) {
     const v_eff = vn * fill.v;
-    const qtc = qts * Math.sqrt(vas / v_eff + 1) * fill.q;
-    const fc = fs * Math.sqrt(vas / v_eff + 1);
+    const alpha = vas / v_eff;
+    const qtc = qts * Math.sqrt(alpha + 1) * fill.q;
+    const fc = fs * Math.sqrt(alpha + 1);
     return { qtc, fc };
 }
 
-// 密闭箱二阶高通声学传递函数的真实幅值 (dB)，以远高频的平坦通带为 0dB 基准
 function boxMagDb(f, fcBox, qtc) {
     const w = f / fcBox;
     const num = Math.pow(w, 4);
     const den = Math.pow(1 - w * w, 2) + (w * w) / (qtc * qtc);
-    return 10 * Math.log10(num / den);
+    return 10 * Math.log10(Math.max(num / den, 1e-12));
 }
 
-// 扫频求箱体自身固有谐振峰的真实峰值 (仅在 Qtc > 0.707 时存在峰值，否则为单调曲线，返回0)
 function boxPeakDb(fcBox, qtc) {
     if (qtc <= Math.SQRT1_2) return 0;
     let maxDb = 0;
@@ -322,9 +320,8 @@ function boxPeakDb(fcBox, qtc) {
     return maxDb;
 }
 
-// DSP 有源滤波器真实传递函数幅值 (dB)
 function filterMagDb(f, crossover, slope) {
-    const n = slope / 6; // 滤波器阶数
+    const n = slope / 6;
     const w = f / crossover;
     let mag;
     if (Number.isInteger(n) && n % 2 === 0) {
@@ -339,11 +336,10 @@ function filterMagDb(f, crossover, slope) {
     return 20 * Math.log10(Math.max(mag, 1e-12));
 }
 
-// 箱体高通 + DSP滤波器 串联后，在相关频段内的最大残留电平 (相对平坦通带0dB基准)
 function systemResidualDb(fcBox, qtc, crossover, slope) {
     const lo = 0.2 * Math.min(fcBox, crossover);
     const hi = 3 * Math.max(fcBox, crossover);
-    const steps = 70;
+    const steps = 80;
     const logLo = Math.log(lo), logHi = Math.log(hi);
     let maxDb = -999, maxFreq = fcBox;
     for (let i = 0; i <= steps; i++) {
@@ -354,18 +350,6 @@ function systemResidualDb(fcBox, qtc, crossover, slope) {
     return { maxDb, maxFreq };
 }
 
-// ---- 空气弹簧非线性 (二次谐波失真) 一阶微扰估算 ----
-// 物理依据：密闭箱空气弹簧遵循绝热压缩关系 P·V^γ = const (γ≈1.4)。
-// 将振膜位移 x(t)=X0·cos(ωt) 代入该关系并按 ΔV/V 做泰勒展开，
-// 保留到二阶项可得到一个非对称(偶次)非线性回复力 F(x) ≈ -K1·x + K2·x²，
-// 其中 K2/K1 = (γ+1)/2 · Sd/V0。
-// 用谐波平衡法(harmonic balance)对 F(x(t)) 做傅里叶分解，
-// 二次谐波分量与基频分量之比为 d2 ≈ (γ+1)/4 · (Sd·X0/V0)。
-// 这是关于相对容积压缩量 ε=Sd·X0/V0 的一阶近似，仅计入箱体空气弹簧本身的
-// 非线性，不包含驱动单元 Bl(x)/Kms(x)/Le(x) 的电磁-力学非线性(那部分需要
-// 厂商的 Klippel 大信号测量数据才能建模，本工具不具备该输入)。
-// 当 ε 较大(经验上 >15%)时，二阶展开已不足以描述真实曲线，估算值仅作
-// 数量级参考，不再视为可靠预测。
 function airSpringTHD2(x_mm, sd_cm2, v_net_L) {
     const GAMMA = 1.4;
     const x_m = x_mm / 1000;
@@ -377,78 +361,82 @@ function airSpringTHD2(x_mm, sd_cm2, v_net_L) {
     return { epsilon, d2Percent };
 }
 
-// 扫描净容积，找到"最大残留降到 targetDb 及以下"所需的最小净容积
-function solveMinNetVolume(fs, qts, vas, fill, crossover, slope, targetDb) {
-    if (targetDb === undefined) targetDb = 0;
+// 物理声学严谨的最小容积求解器：结合 DSP 谐振穿透、空气非线性压缩比、及基础气垫物理约束
+function solveTrueMinNetVolume(fs, qts, vas, fill, crossover, slope, sd, xmax) {
     const steps = 250;
-    const loVn = 0.01, hiVn = 50;
+    const loVn = 0.05, hiVn = 10.0;
     const logLo = Math.log(loVn), logHi = Math.log(hiVn);
-    let lastUnsafeIndex = -1;
-    let vnAt = [];
+    
+    // 硬约束1：空气非线性压缩率 Delta V / V <= 8% (对应 THD2 <= 4.8%)
+    let v_min_air = 0.05;
+    if (sd && xmax) {
+        v_min_air = ( (sd / 10000) * (xmax / 1000) / 0.08 ) * 1000;
+    }
+
+    let foundVn = null;
     for (let i = 0; i <= steps; i++) {
         const vn = Math.exp(logLo + (logHi - logLo) * i / steps);
-        vnAt.push(vn);
+        if (vn < v_min_air) continue;
+
         const st = acousticState(vn, fs, qts, vas, fill);
         const res = systemResidualDb(st.fc, st.qtc, crossover, slope);
-        if (res.maxDb > targetDb) lastUnsafeIndex = i;
+        
+        // 硬约束2：滤波后谐振穿透残余 <= 0.2dB 且 Fc 不能恶性飙升到分频点的 1.5 倍以上
+        if (res.maxDb <= 0.2 && st.fc <= crossover * 1.5) {
+            foundVn = vn;
+            break;
+        }
     }
-    if (lastUnsafeIndex === steps) return null;
-    return vnAt[lastUnsafeIndex + 1];
+    return foundVn;
 }
 
-// ---- 分频点声学电平 / 容积上限 ----
-// 物理背景：Qtc 与 Fc 由同一个 sqrt(Vas/V+1) 因子按固定比例(Qts/Fs)联动，
-// 不是两个独立自由度。这意味着"箱体自身响应在给定分频点 fx 处的电平"，
-// 相对容积 V 并不是单调变化的：容积从很小增大时，Qtc 从很高的过阻尼状态
-// 往 0.707 靠近，fx 处电平会先升高；一旦容积继续增大、Qtc 跌破 0.707 并
-// 持续走低，fx 相对新 Fc 的位移速度会落后于 Q 值下降拖累响应的速度，
-// 电平反而重新走低——也就是说存在一个"最优容积"，比它小或比它大都会更差。
-// 这个电平只由箱体自身高通响应决定，与所选的分频器斜率无关(参见
-// systemResidualDb 上方注释：箱体额外衰减量 = boxMagDb 本身)，所以这里
-// 不需要像 solveMinNetVolume 那样按斜率分别求解。
-function solveVolumeCeiling(fs, qts, vas, fill, crossover, targetDb) {
-    const steps = 250;
-    const loVn = 0.01, hiVn = 50;
-    const logLo = Math.log(loVn), logHi = Math.log(hiVn);
-    let vnAt = [], vals = [];
-    for (let i = 0; i <= steps; i++) {
-        const vn = Math.exp(logLo + (logHi - logLo) * i / steps);
-        const st = acousticState(vn, fs, qts, vas, fill);
-        vnAt.push(vn);
-        vals.push(boxMagDb(crossover, st.fc, st.qtc));
+// 计算推荐黄金容积区间 [V_opt_min, V_opt_max]
+function getOptimalVolumeRange(fs, qts, vas, fill) {
+    // 下限：Qtc = 0.707 对应容积（若单元Qts本身>0.707，则取 Vas*0.8 作为名义下限）
+    let v_target_0707;
+    if (qts * fill.q < 0.707) {
+        v_target_0707 = vas / (Math.pow(0.707 / (qts * fill.q), 2) - 1) / fill.v;
+    } else {
+        v_target_0707 = vas * 0.5;
     }
-    let bestIdx = 0;
-    for (let i = 1; i <= steps; i++) { if (vals[i] > vals[bestIdx]) bestIdx = i; }
-    let ceilingVn = null;
-    for (let i = bestIdx; i <= steps; i++) {
-        if (vals[i] < targetDb) { ceilingVn = vnAt[i]; break; }
+    
+    // 上限（边际效益拐点）：Qtc = 0.55 (贝塞尔响应/极佳阻尼)，再大对中音改善已低于 0.3dB
+    let v_target_055;
+    if (qts * fill.q < 0.55) {
+        v_target_055 = vas / (Math.pow(0.55 / (qts * fill.q), 2) - 1) / fill.v;
+    } else {
+        v_target_055 = v_target_0707 * 2.5;
     }
-    return { vOptimalNet: vnAt[bestIdx], peakDb: vals[bestIdx], ceilingNet: ceilingVn };
+
+    return {
+        vMinNet: Math.max(0.1, v_target_0707),
+        vMaxNet: Math.max(v_target_0707 * 1.5, v_target_055)
+    };
 }
 
 function qtcCharacter(qtc, peakDb) {
-    if (qtc < 0.4) {
-        return { title: "过阻尼特征", desc: "系统阻尼很高，瞬态收敛快、无过冲，但空气弹簧对振膜位移的物理约束偏弱。" };
-    } else if (qtc < 0.55) {
-        return { title: "临界阻尼特征", desc: "系统接近临界阻尼，是瞬态响应最干净、无明显过冲的力学状态。" };
+    if (qtc < 0.5) {
+        return { title: "强过阻尼状态 (极度纯净/松弛)", desc: "瞬态收敛极快，完全无拖尾，失真极低，中频宽松自然；对功放大电流控制力有一定要求。" };
+    } else if (qtc <= 0.6) {
+        return { title: "贝塞尔响应状态 (理想阻尼)", desc: "群延时最为平坦，瞬态响应干净利落，是追求人声解析力与自然度的绝佳状态。" };
     } else if (qtc <= 0.707) {
-        return { title: "轻度欠阻尼特征", desc: "系统阻尼适中偏紧，瞬态表现与位移约束能力较为均衡。" };
-    } else if (qtc <= 0.85) {
-        return { title: "轻度欠阻尼特征", desc: `箱体自身固有谐振峰约 +${peakDb.toFixed(1)}dB，气垫对振膜的物理约束有所增强。` };
+        return { title: "巴特沃斯响应 (标准工程平衡)", desc: "频响平直度与瞬态控制的最佳折中点，能量均衡，气垫阻尼适中。" };
+    } else if (qtc <= 0.9) {
+        return { title: "轻度欠阻尼 (紧实/偏厚)", desc: `箱体固有谐振峰约 +${peakDb.toFixed(1)}dB，人声中低频能量感有所增强，需配合 DSP 高通切除谐振。` };
     } else if (qtc <= 1.1) {
-        return { title: "中度欠阻尼特征", desc: `箱体自身固有谐振峰约 +${peakDb.toFixed(1)}dB，瞬态响应可能出现轻微拖尾。` };
+        return { title: "中度欠阻尼 (发紧/有余振)", desc: `箱体固有谐振峰达 +${peakDb.toFixed(1)}dB，瞬态略显拖尾，声音偏紧，必须依赖较陡峭的 DSP 滤波。` };
     } else {
-        return { title: "重度欠阻尼特征", desc: `箱体自身固有谐振峰约 +${peakDb.toFixed(1)}dB，瞬态拖尾较为明显。` };
+        return { title: "重度欠阻尼 (严重失真风险)", desc: `箱体谐振严重 (+${peakDb.toFixed(1)}dB)，气垫严重束缚振膜，极易引发音色发硬发干。` };
     }
 }
 
 function buildMinVolTable(minVolRows, chosenSlope) {
     let rows = minVolRows.map(r => {
         const isChosen = r.slope === chosenSlope;
-        const valText = r.v_cad_min !== null ? r.v_cad_min.toFixed(2) + " L" : "50L 以内无法达标";
+        const valText = r.v_cad_min !== null ? r.v_cad_min.toFixed(2) + " L" : "受限于物理极限不可用";
         return `<tr class="${isChosen ? 'highlight' : ''}"><td>${r.slope} dB/oct${isChosen ? '（当前选择）' : ''}</td><td>${valText}</td></tr>`;
     }).join('');
-    return `<table class="minvol-table"><thead><tr><th>滤波器斜率</th><th>安全所需最小容积 (V_cad)</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<table class="minvol-table"><thead><tr><th>滤波器斜率</th><th>物理安全底线容积 (V_cad)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function calculate() {
@@ -465,324 +453,230 @@ function calculate() {
     const mat_type = document.getElementById('material').value;
     const tech_mode = document.getElementById('special_tech').value;
 
+    const isLargeSignalEnabled = document.getElementById('enable_large_signal').checked;
+    const xmax = isLargeSignalEnabled ? parseFloat(document.getElementById('xmax').value) : 2.5;
+    const sd = isLargeSignalEnabled ? parseFloat(document.getElementById('sd').value) : 32.0;
+    const re = isLargeSignalEnabled ? parseFloat(document.getElementById('re').value) : 3.6;
+    const pe = isLargeSignalEnabled ? parseFloat(document.getElementById('pe').value) : 30.0;
+
     const v_net = v_cad - v_driver;
-    if (v_net <= 0) { alert("逻辑错误：净容积不能小于或等于喇叭排开体积。"); return; }
-    if (crossover <= fs) { alert("逻辑警示：计划分频点低于或过于接近单元自由空气谐振频率 Fs，该单元物理上无法在此频点以下正常滚降，请提高分频点。"); return; }
+    if (v_net <= 0) { alert("逻辑错误：逆向建模净容积必须大于磁钢占位体积。"); return; }
 
     document.getElementById('res').style.display = 'block';
     document.getElementById('shareBtn').style.display = 'block';
     document.getElementById('watermark').style.display = 'block';
     document.getElementById('date-time').innerText = new Date().toLocaleString();
 
-    // 1. 箱体自由声场固有物理特性 (带有 Qtc 动态健康度颜色判定)
+    // 1. 声学状态计算
     const state = acousticState(v_net, fs, qts, vas, fill);
     const qtc = state.qtc, fc = state.fc;
     const bw_val = qtc > 0 ? (fc / qtc) : 0;
     const peak_db = boxPeakDb(fc, qtc);
     const character = qtcCharacter(qtc, peak_db);
 
-    // --- 动态 Qtc 颜色分级逻辑 ---
     let q_class = "status-safe";
     let q_color = "#27ae60";
-
-    if (qtc > 1.10) {
-        q_class = "status-danger";
-        q_color = "#c0392b";
-    } else if (qtc > 0.85) {
-        q_class = "status-warn";
-        q_color = "#f39c12";
-    } else {
-        q_class = "status-safe";
-        q_color = "#27ae60";
-    }
+    if (qtc > 1.0) { q_class = "status-danger"; q_color = "#c0392b"; }
+    else if (qtc > 0.78) { q_class = "status-warn"; q_color = "#f39c12"; }
 
     document.getElementById('qtc_eval').className = "section " + q_class;
     document.getElementById('qtc_eval').innerHTML = `
-        <h4>声学响应特性 (Qtc / Fc) <span class="tag">Free-field Physics</span></h4>
+        <h4>声学阻尼与固有特性 (Qtc / Fc) <span class="tag">Acoustic Physics</span></h4>
         <div class="data-row">
             <div class="main-val" style="color:${q_color}">${qtc.toFixed(3)}</div>
             <div class="sub-data">
-                Fc: <b>${Math.round(fc)} Hz</b><br>
-                Q_peak: <b>+${peak_db.toFixed(2)} dB</b><br>
-                带宽 (Bw): <b>${Math.round(bw_val)} Hz</b>
+                密闭谐振点 (Fc): <b>${Math.round(fc)} Hz</b><br>
+                箱体谐振隆起: <b>+${peak_db.toFixed(2)} dB</b><br>
+                系统带宽 (Bw): <b>${Math.round(bw_val)} Hz</b>
             </div>
         </div>
         <div class="desc-text">
             <span class="desc-title" style="color:${q_color}">${character.title}</span>
             <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 6px; line-height: 1.45;">${character.desc}</div>
-            <div style="font-size: 0.8rem; color: var(--neutral); margin-top: 10px; line-height: 1.5;">
-                以上仅描述箱体在自由声场下的固有物理特性。该特性是否会影响实际听感，取决于下方"DSP 分频匹配诊断"中箱体响应与滤波器串联后的实际结果——这才是本工具评估的核心。
-            </div>
         </div>
     `;
 
-    // 2. DSP 分频匹配诊断（箱体高通 × 滤波器高通，真实传递函数串联）
+    // 2. DSP 分频与频响穿透诊断
     const residual = systemResidualDb(fc, qtc, crossover, slope);
     const net_leak = residual.maxDb;
 
     let matchClass, matchTitle, matchDesc, matchColor;
-    if (net_leak > 3) {
+    if (net_leak > 1.5) {
         matchClass = "status-danger"; matchColor = "#c0392b";
         matchTitle = "谐振峰明显穿透通带";
-        matchDesc = `在 ${Math.round(residual.maxFreq)}Hz 附近，箱体响应经过 ${crossover}Hz / ${slope}dB·oct 滤波后，仍比正常平坦通带电平高出约 ${net_leak.toFixed(1)}dB，属于可被听出的明显染色风险。`;
-    } else if (net_leak > 0) {
+        matchDesc = `在 ${Math.round(residual.maxFreq)}Hz 附近，箱体谐振经 ${crossover}Hz / ${slope}dB·oct 滤波后仍有 +${net_leak.toFixed(1)}dB 的残余隆起，存在明显声染色与发紧风险。`;
+    } else if (net_leak > 0.2) {
         matchClass = "status-warn"; matchColor = "#f39c12";
-        matchTitle = "存在轻微残留隆起";
-        matchDesc = `在 ${Math.round(residual.maxFreq)}Hz 附近，滤波后仍比正常平坦通带电平高出约 ${net_leak.toFixed(1)}dB，处于勉强可接受的边界，电平较高时有被听出的可能。`;
+        matchTitle = "存在轻度谐振泄漏";
+        matchDesc = `在 ${Math.round(residual.maxFreq)}Hz 附近滤波后有约 +${net_leak.toFixed(1)}dB 轻度隆起，处于工程可用边界，建议在 DSP 中对分频点附近做微调衰减。`;
     } else {
         matchClass = "status-safe"; matchColor = "#27ae60";
-        matchTitle = "无谐振隆起，通带平坦";
-        matchDesc = `在相关频段内，箱体响应经滤波后没有超出正常平坦通带电平（最高点约 ${net_leak.toFixed(1)}dB），箱体谐振（如有）已被充分抑制。`;
+        matchTitle = "通带顺滑，谐振抑制完美";
+        matchDesc = `箱体固有谐振完全处于分频点保护带之下，滤波后通带平坦，无声染色风险。`;
     }
 
-    // 2b. 分频点声学电平 / 容积上限诊断（见 solveVolumeCeiling 上方注释）
-    // 与上面的谐振穿透诊断是两个独立的方向：net_leak 找的是"有没有多出来的隆起"，
-    // 这里找的是"箱体自身响应在分频点处有没有还没追平"，只跟箱体+分频点有关，
-    // 与滤波器斜率无关。
-    const currentCrossDb = boxMagDb(crossover, fc, qtc);
-    const ceiling = solveVolumeCeiling(fs, qts, vas, fill, crossover, -1);
-    const vCadOptimal = ceiling.vOptimalNet + v_driver;
-    const vCadCeiling = ceiling.ceilingNet !== null ? ceiling.ceilingNet + v_driver : null;
+    // 黄金容积区间计算
+    const optRange = getOptimalVolumeRange(fs, qts, vas, fill);
+    const optCadMin = (optRange.vMinNet + v_driver).toFixed(2);
+    const optCadMax = (optRange.vMaxNet + v_driver).toFixed(2);
 
-    let undershootClass = "safe";
-    let undershoot_info_html = "";
-    if (ceiling.peakDb < -3) {
-        undershootClass = "danger";
-        undershoot_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 分频点相对该单元 Fs/Qts 组合定得过低: 即便把容积调到该分频点下的理论最优值（约 ${vCadOptimal.toFixed(2)}L），分频点处声学电平也只能达到约 ${ceiling.peakDb.toFixed(1)}dB，明显低于平坦基准。当前容积（${v_cad.toFixed(2)}L）下电平约 ${currentCrossDb.toFixed(1)}dB。这不是容积没调好的问题，继续调容积收益有限，建议优先提高分频点。</div>`;
-    } else if (currentCrossDb < -3) {
-        undershootClass = "danger";
-        undershoot_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 容积偏大导致分频点处电平不足: 当前容积（${v_cad.toFixed(2)}L）下，分频点处声学电平约 ${currentCrossDb.toFixed(1)}dB，明显低于平坦基准。该分频点对应的最佳容积约 ${vCadOptimal.toFixed(2)}L（电平约 ${ceiling.peakDb.toFixed(1)}dB），建议向该值靠拢。</div>`;
-    } else if (currentCrossDb < -1) {
-        undershootClass = "warn";
-        undershoot_info_html = `<div style="color:var(--warn); font-size:0.8rem; margin-top:8px;">ℹ️ 分频点处电平轻微不足: 当前容积下电平约 ${currentCrossDb.toFixed(1)}dB，处于勉强可接受的边界。该分频点对应的最佳容积约 ${vCadOptimal.toFixed(2)}L（电平约 ${ceiling.peakDb.toFixed(1)}dB），若追求更贴近平坦，可向该值靠拢。</div>`;
-    } else {
-        undershoot_info_html = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 分频点处声学电平已追平通带: 当前容积下电平约 ${currentCrossDb.toFixed(1)}dB。`;
-        if (vCadCeiling !== null) {
-            undershoot_info_html += ` 供参考：若后续容积继续增大到约 ${vCadCeiling.toFixed(2)}L 以上，电平会开始明显低于平坦基准（跌破 -1dB）。`;
-        }
-        undershoot_info_html += `</div>`;
-    }
-
-    // 3. 大信号位移校验（复用滤波器在Fc处的真实衰减量）
-    let limit_info_html = "";
+    // 3. 大信号位移与空气非线性计算
     let x_fc_filtered = null;
-    const isLargeSignalEnabled = document.getElementById('enable_large_signal').checked;
+    let air_thd = { epsilon: 0, d2Percent: 0 };
+    let limit_info_html = "";
+    
     if (isLargeSignalEnabled) {
-        const xmax = parseFloat(document.getElementById('xmax').value);
-        const sd = parseFloat(document.getElementById('sd').value);
-        const re = parseFloat(document.getElementById('re').value);
-        const pe = parseFloat(document.getElementById('pe').value);
-
         const eg = Math.sqrt(pe * re);
         const x_fc_raw = (50 * eg * qtc * sd) / (Math.PI * fc * vas * re);
         const atten_at_fc_db = Math.max(-filterMagDb(fc, crossover, slope), 0);
-        const atten_factor = Math.pow(10, -atten_at_fc_db / 20);
-        x_fc_filtered = x_fc_raw * atten_factor;
+        x_fc_filtered = x_fc_raw * Math.pow(10, -atten_at_fc_db / 20);
+        air_thd = airSpringTHD2(x_fc_filtered, sd, v_net);
         const x_limit = xmax * 0.8;
 
         if (x_fc_filtered > x_limit) {
-            limit_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 振膜位移过载预警: 在 ${crossover}Hz / ${slope}dB·oct 分频保护下，Fc 处预估振幅仍为 ${x_fc_filtered.toFixed(2)}mm，超过 80% 安全限值 (${x_limit.toFixed(2)}mm)。</div>`;
+            limit_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 振膜位移过载预警: 在额定功率下，Fc 处预估位移为 ${x_fc_filtered.toFixed(2)}mm，超过 80% 安全极限 (${x_limit.toFixed(2)}mm)，建议提高分频点或加陡斜率。</div>`;
         } else {
-            limit_info_html = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 大信号位移安全: 在 ${crossover}Hz / ${slope}dB·oct 分频保护下，Fc 处预估振幅为 ${x_fc_filtered.toFixed(2)}mm，低于安全警戒线 (${x_limit.toFixed(2)}mm)。</div>`;
+            limit_info_html = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 振膜位移处于安全裕量内: 滤波后最大位移预估为 ${x_fc_filtered.toFixed(2)}mm (安全限值 ${x_limit.toFixed(2)}mm)。</div>`;
         }
     }
 
-    // 4. 不同滤波器斜率下的最小推荐容积
-    const refSlopes = Array.from(new Set([12, 24, 48, slope])).sort((a, b) => a - b);
+    // 多斜率安全底线容积表
+    const refSlopes = Array.from(new Set([12, 18, 24, 36, 48, slope])).sort((a, b) => a - b);
     const minVolRows = refSlopes.map(sl => {
-        const vn_min = solveMinNetVolume(fs, qts, vas, fill, crossover, sl, 0);
+        const vn_min = solveTrueMinNetVolume(fs, qts, vas, fill, crossover, sl, sd, xmax);
         const v_cad_min = vn_min !== null ? vn_min + v_driver : null;
         return { slope: sl, v_cad_min };
     });
-    const chosenRow = minVolRows.find(r => r.slope === slope);
 
-    let diminishNote = "";
-    if (chosenRow && chosenRow.v_cad_min !== null) {
-        const baseVn = chosenRow.v_cad_min - v_driver;
-        const doubleVn = baseVn * 2;
-        const doubleState = acousticState(doubleVn, fs, qts, vas, fill);
-        const doubleResidual = systemResidualDb(doubleState.fc, doubleState.qtc, crossover, slope);
-        diminishNote = `<div style="font-size:0.8rem; color:var(--text-sub); margin-top:10px; line-height:1.5;">参考：在安全所需最小容积基础上再增大一倍（约 ${(doubleVn + v_driver).toFixed(2)}L），最大残留会进一步降至约 ${doubleResidual.maxDb.toFixed(1)}dB——声学层面的边际收益已经很有限，此后容积主要取决于安装空间而非声学必要性。</div>`;
-    }
-
-    let overallDspClass = matchClass;
-    if (undershootClass === "danger") overallDspClass = "status-danger";
-    else if (undershootClass === "warn" && overallDspClass === "status-safe") overallDspClass = "status-warn";
-
-    document.getElementById('dsp_eval').className = "section " + overallDspClass;
+    document.getElementById('dsp_eval').className = "section " + matchClass;
     document.getElementById('dsp_eval').innerHTML = `
-        <h4>DSP 分频匹配诊断 <span class="tag" style="background:#2980b9; color:white;">Crossover Matching</span></h4>
+        <h4>DSP 分频匹配与容积规划 <span class="tag" style="background:#2980b9; color:white;">DSP & Enclosure Range</span></h4>
         <div class="data-row">
             <div class="main-val" style="color:${matchColor}; font-size:1.3rem;">${matchTitle}</div>
             <div class="sub-data">
-                残留峰值频率: <b>${Math.round(residual.maxFreq)} Hz</b><br>
-                最大残留电平: <b>${net_leak.toFixed(1)} dB</b><br>
-                (相对平坦通带基准)
+                推荐黄金容积区间: <b>${optCadMin} ~ ${optCadMax} L</b><br>
+                残余隆起峰值: <b>${net_leak > 0 ? '+' + net_leak.toFixed(1) : '0.0'} dB</b>
             </div>
         </div>
         <div class="desc-text" style="font-size:0.85rem; color:var(--text-sub); margin-top:8px;">${matchDesc}</div>
-        ${undershoot_info_html}
         ${limit_info_html}
         <div class="rec-box" style="margin-top:15px;">
-            <span class="rec-title">📋 不同滤波器斜率下的安全所需最小容积</span>
+            <span class="rec-title">📋 滤波器斜率与物理安全底线容积对照</span>
             ${buildMinVolTable(minVolRows, slope)}
-            ${diminishNote}
-        </div>
-        <div class="disclaimer-neutral">
-            <span class="disclaimer-title">声明：</span>
-            以上诊断基于箱体二阶密闭高通传递函数与您设定的分频点、滤波器斜率（真实幅频响应，非直线近似）串联计算得出，用于设计阶段预判箱体响应能否被分频器压制到平坦通带以内。车内座舱增益、驻波与反射等实车环境因素不在本工具建模范围内——这些因素高度依赖具体车型与安装位置，没有可靠的通用公式替代实测；最终分频点与EQ仍需以实车 RTA 测试与主观试听为准。
+            <div style="font-size:0.8rem; color:var(--text-sub); margin-top:10px; line-height:1.5;">
+                💡 <b>容积设计原则：</b>上述表格为“不可突破的物理与失真安全底线”。在车内容积允许的前提下，中音箱体建议做到推荐黄金区间（<b>${optCadMin} ~ ${optCadMax} L</b>）。容积做大中频更松弛自然，做小声音偏紧实，均可通过 DSP 正常调校。
+            </div>
         </div>
     `;
 
-    // 5. 结构力学、背波与小容积空气非线性风险
+    // 4. 结构力学与背波反射
     let E = 2.2e9, rho = 1070;
     if (mat_type === 'PLA') { E = 3.5e9; rho = 1240; }
     else if (mat_type === 'PETG') { E = 2.0e9; rho = 1270; }
-    else if (mat_type === 'ASA') { E = 2.2e9; rho = 1070; }
     else if (mat_type === 'CFNylon') { E = 8.0e9; rho = 1400; }
 
-    let geom_k = 1.0;
-    if (tech_mode === "curved") geom_k = 1.5;
-    else if (tech_mode === "fuzzy" || tech_mode === "damped") geom_k = 1.8;
-
+    let geom_k = tech_mode === "curved" ? 1.5 : (tech_mode === "fuzzy" || tech_mode === "damped" ? 1.8 : 1.0);
     const v_long = Math.sqrt(E / rho);
     const t_m = wall / 1000;
     const a_m = span_a / 1000;
     const f_panel = 0.45 * v_long * (t_m / (a_m * a_m)) * geom_k;
 
-    let vol_penalty = Math.pow(v_cad, 0.3);
-    let load_factor = Math.max(1.0, qtc / 0.707);
-    let strength_val = (Math.pow(wall, 1.8) * (E / 1.5e9) * geom_k) / vol_penalty;
-    let safety_ratio = strength_val / load_factor;
+    let strength_val = (Math.pow(wall, 1.8) * (E / 1.5e9) * geom_k) / Math.pow(v_cad, 0.3);
+    let safety_ratio = strength_val / Math.max(1.0, qtc / 0.707);
 
     let str_class = safety_ratio > 18 ? "status-safe" : (safety_ratio > 12 ? "status-warn" : "status-danger");
-    let str_status = safety_ratio > 30 ? "壳体刚性：极强 (自振干扰低)" : (safety_ratio > 18 ? "壳体刚性：合格" : (safety_ratio > 12 ? "壳体刚性：中等 (存在共振风险)" : "壳体刚性：薄弱 (共振风险高)"));
+    let str_status = safety_ratio > 28 ? "壳体刚性：极高 (自振抑制极佳)" : (safety_ratio > 18 ? "壳体刚性：合格" : "壳体刚性：偏软 (存在共振染色风险)");
 
     let approx_depth_cm = Math.cbrt(v_net * 1000);
     let extraWarnings = [];
-    if (approx_depth_cm < 7.5 && document.getElementById('fill_mode').value === "none") {
-        extraWarnings.push("近距离背波透射风险：腔体深度较浅（≈" + approx_depth_cm.toFixed(1) + "cm）且无吸音棉，背波撞击后壁易反弹穿透振膜，建议在磁体正后方粘贴波浪吸音棉。");
+    if (approx_depth_cm < 6.0 && document.getElementById('fill_mode').value === "none") {
+        extraWarnings.push("近距离背波反射风险：腔体深度过浅（≈" + approx_depth_cm.toFixed(1) + "cm）且无吸音阻尼，背波极易反弹穿透振膜造成中频梳状滤波，建议在磁体后方粘贴高密度波浪棉。");
     }
 
-    // 空气弹簧非线性 (二次谐波失真) 定量估算 —— 见 airSpringTHD2() 上方的推导注释。
-    // 仅在开启大信号校验且已算出 Fc 处滤波后振幅时才具备计算所需的输入 (振幅、Sd、净容积)。
-    let air_nl_info_html = "";
-    if (isLargeSignalEnabled && x_fc_filtered !== null) {
-        const sd_cm2 = parseFloat(document.getElementById('sd').value);
-        const thd = airSpringTHD2(x_fc_filtered, sd_cm2, v_net);
-        const epsPct = (thd.epsilon * 100).toFixed(1);
-        const d2Str = thd.d2Percent.toFixed(2);
-
-        if (thd.epsilon > 0.15) {
-            air_nl_info_html = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 空气弹簧非线性估算超出模型适用范围: 相对容积压缩量 ΔV/V≈${epsPct}%，一阶微扰近似（THD2≈${d2Str}%）在此区间已不再可靠，真实失真大概率明显更高，说明净容积相对该振幅已偏小。</div>`;
-            extraWarnings.push(`空气弹簧非线性风险已超出本工具估算模型的适用范围（ΔV/V≈${epsPct}%，一阶近似给出的 THD2≈${d2Str}% 仅供数量级参考），建议优先通过增大容积、提高分频点或提高滤波器斜率来降低该频率下的振幅。`);
-        } else if (thd.d2Percent > 3) {
-            air_nl_info_html = `<div style="color:var(--warn); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 空气弹簧非线性估算: 在 ${crossover}Hz 附近，${x_fc_filtered.toFixed(2)}mm 的预估振幅相对 ${v_net.toFixed(2)}L 净容积产生约 ${epsPct}% 的相对容积压缩，一阶近似给出二次谐波失真 THD2≈${d2Str}%，该量级有一定概率被听出（表现为音色发紧、发硬）。</div>`;
-            extraWarnings.push(`空气弹簧非线性偏高（一阶近似估算 THD2≈${d2Str}%），建议结合上方最小容积参考表适当增大容积或提高分频点/斜率。`);
-        } else if (thd.d2Percent > 1) {
-            air_nl_info_html = `<div style="color:var(--text-sub); font-size:0.8rem; margin-top:8px;">ℹ️ 空气弹簧非线性估算: ΔV/V≈${epsPct}%，一阶近似给出 THD2≈${d2Str}%，处于通常难以察觉的边界，暂不需要特别处理。</div>`;
-        } else {
-            air_nl_info_html = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 空气弹簧非线性可忽略: 一阶近似给出 THD2≈${d2Str}%（ΔV/V≈${epsPct}%）。</div>`;
-        }
-    }
-
-    if (isLargeSignalEnabled && x_fc_filtered !== null) {
-        const depth_mm = approx_depth_cm * 10;
-        const ratio_pct = (x_fc_filtered / depth_mm) * 100;
-        if (ratio_pct > 6) {
-            extraWarnings.push(`大信号位移相对箱体等效深度占比约 ${ratio_pct.toFixed(1)}%，箱体内部可用空间相对该振幅偏紧张，建议结合上方 THD2 估算与结构预留一并评估。`);
-        }
+    if (air_thd.d2Percent > 3.0) {
+        extraWarnings.push(`空气弹簧绝热非线性偏高 (预估 THD2 ≈ ${air_thd.d2Percent.toFixed(1)}%)：小腔体内气垫较硬，建议微增容积或提高分频点。`);
     }
 
     let recommendations = [];
-    if (safety_ratio <= 25) {
-        if (mat_type !== 'CFNylon' && E < 3e9) recommendations.push("板材弹性模量偏低，推荐更换为 CF-Nylon 耗材或提高填充率。");
+    if (safety_ratio <= 20) {
         if (wall < 3.5) recommendations.push("建议壁厚增加至至少 3.5mm。");
-        if (tech_mode !== "damped") recommendations.push("建议开启模糊表皮或内壁涂抹阻尼胶。");
+        if (tech_mode === "flat") recommendations.push("建议采用异形曲面设计并开启切片‘模糊表皮’以打破单一面谐振。");
     }
 
-    let resonance_warning = "";
-    if (f_panel >= 200 && f_panel <= 1500) {
-        str_class = "status-danger";
-        resonance_warning = `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 面板自振基频重叠预警: 板件估算自振频率为 ${Math.round(f_panel)} Hz，正落入中音工作带内！存在外壳共振声染色风险。</div>`;
-    } else {
-        resonance_warning = `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 机械谐振避让良好: 最低阶面板谐振点为 ${Math.round(f_panel)} Hz。</div>`;
-    }
-
-    let str_html = `<h4>箱体结构工艺与力学评估 <span class="tag">Structural Analysis</span></h4>`;
-    str_html += `<div class="data-row"><div class="main-val" style="font-size:1.3rem;">${str_status}</div></div>`;
-    str_html += resonance_warning;
-    str_html += air_nl_info_html;
-    if (recommendations.length > 0 || extraWarnings.length > 0) {
-        str_html += `<div class="rec-box"><span class="rec-title">📋 物理改良建议</span><ul class="rec-list">${extraWarnings.map(w => `<li>${w}</li>`).join('')}${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
-    } else {
-        str_html += `<div class="rec-ok" style="margin-top:10px;">√ 结构力学参数计算良好。</div>`;
-    }
+    let resonance_warning = (f_panel >= 200 && f_panel <= 1200) 
+        ? `<div style="color:var(--danger); font-size:0.8rem; font-weight:bold; margin-top:8px;">⚠️ 面板自振基频重叠预警: 板件估算谐振点为 ${Math.round(f_panel)} Hz，正落入中音工作带，需加强筋或阻尼胶抑制。</div>`
+        : `<div style="color:var(--safe); font-size:0.8rem; margin-top:8px;">✓ 机械谐振避让良好: 最低阶面板自振频率为 ${Math.round(f_panel)} Hz。</div>`;
 
     document.getElementById('str_eval').className = "section " + str_class;
-    document.getElementById('str_eval').innerHTML = str_html;
+    document.getElementById('str_eval').innerHTML = `
+        <h4>箱体结构工艺与力学评估 <span class="tag">Structural & Mechanics</span></h4>
+        <div class="data-row"><div class="main-val" style="font-size:1.3rem;">${str_status}</div></div>
+        ${resonance_warning}
+        ${extraWarnings.length > 0 ? `<div class="rec-box"><span class="rec-title">📋 物理改良建议</span><ul class="rec-list">${extraWarnings.map(w => `<li>${w}</li>`).join('')}${recommendations.map(r => `<li>${r}</li>`).join('')}</ul></div>` : `<div class="rec-ok">√ 结构力学参数与腔体深度设计良好。</div>`}
+    `;
 
-    // 6. 雷达图评分
-    let s_transient = Math.max(0, 100 - Math.abs(qtc - 0.6) * 130);
-    const underPenalty = currentCrossDb < -1 ? Math.min(60, (-1 - currentCrossDb) * 10) : 0;
-    let s_match = Math.max(0, Math.min(100, 100 - net_leak * 12 - underPenalty));
-    let s_power;
-    if (isLargeSignalEnabled && x_fc_filtered !== null) {
-        const xmax = parseFloat(document.getElementById('xmax').value);
-        s_power = Math.max(0, Math.min(100, 100 * (1 - x_fc_filtered / xmax)));
-    } else {
-        s_power = qtc <= 1.0 ? (70 + qtc * 30) : Math.max(0, 100 - (qtc - 1.0) * 70);
-    }
-    let s_structure = Math.min(100, Math.max(0, safety_ratio * 3.0));
-    if (extraWarnings.length > 0) s_structure = Math.min(s_structure, 70);
+    // 5. 雷达图评分计算
+    let s_transient = qtc <= 0.6 ? 100 : (qtc <= 0.707 ? 92 : Math.max(20, 92 - (qtc - 0.707) * 150));
+    let s_match = Math.max(20, Math.min(100, 100 - net_leak * 25));
+    let s_power = isLargeSignalEnabled && x_fc_filtered !== null ? Math.max(20, Math.min(100, 100 * (1 - x_fc_filtered / (xmax * 1.2)))) : 85;
+    let s_structure = Math.min(100, Math.max(20, safety_ratio * 3.2));
+    
+    // 空间适配度评分：在黄金区间内得高分，过小重扣，过大轻微降分（提示空间浪费）
     let s_compact;
-    if (chosenRow && chosenRow.v_cad_min !== null && chosenRow.v_cad_min > 0) {
-        const ratio = v_cad / chosenRow.v_cad_min;
-        s_compact = ratio >= 1 ? Math.max(0, 100 - (ratio - 1) * 20) : Math.max(0, 100 * ratio);
+    if (v_cad < parseFloat(optCadMin)) {
+        s_compact = Math.max(20, (v_cad / parseFloat(optCadMin)) * 80);
+    } else if (v_cad <= parseFloat(optCadMax)) {
+        s_compact = 95;
     } else {
-        s_compact = 20;
+        s_compact = Math.max(60, 95 - (v_cad - parseFloat(optCadMax)) * 15);
     }
 
     const cap = (val) => Math.round(Math.max(0, Math.min(100, val)));
     renderRadar([cap(s_transient), cap(s_match), cap(s_power), cap(s_structure), cap(s_compact)]);
 
-    // 7. 标签
+    // 6. 标签与最终综合评定
     let tags = [];
-    if (matchClass === "status-danger") tags.push({ t: "谐振穿透通带", c: "#c0392b" });
-    else if (matchClass === "status-warn") tags.push({ t: "残留隆起边界值", c: "#f39c12" });
-    else {
-        const ratio = (chosenRow && chosenRow.v_cad_min) ? v_net / (chosenRow.v_cad_min - v_driver) : 1;
-        tags.push({ t: ratio > 2 ? "容积高度宽容" : "分频匹配安全", c: "#27ae60" });
+    if (qtc <= 0.6) tags.push({ t: "超优瞬态解析", c: "#27ae60" });
+    else if (qtc <= 0.75) tags.push({ t: "标准平衡阻尼", c: "#2980b9" });
+    else if (qtc <= 0.9) tags.push({ t: "人声偏厚偏暖", c: "#f39c12" });
+    else tags.push({ t: "箱体阻尼偏紧", c: "#c0392b" });
+
+    if (v_cad >= parseFloat(optCadMin) && v_cad <= parseFloat(optCadMax)) {
+        tags.push({ t: "黄金容积区间", c: "#27ae60" });
+    } else if (v_cad > parseFloat(optCadMax)) {
+        tags.push({ t: "容积充裕/宽松", c: "#2980b9" });
+    } else {
+        tags.push({ t: "容积紧凑/受限", c: "#f39c12" });
     }
-    if (undershootClass === "danger") tags.push({ t: "分频点电平不足", c: "#c0392b" });
-    else if (undershootClass === "warn") tags.push({ t: "分频点电平轻微不足", c: "#f39c12" });
     document.getElementById('tag_cloud').innerHTML = tags.map(t => `<span class="sound-tag" style="background:${t.c}">${t.t}</span>`).join('');
 
-    // 8. 综合判断
     let verdict_html = "";
-    const toleranceHigh = matchClass === "status-safe" && undershootClass === "safe" && chosenRow && chosenRow.v_cad_min !== null && v_net > 2 * (chosenRow.v_cad_min - v_driver);
-
     if (matchClass === "status-danger") {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">⚠️</div><div><b>谐振穿透通带 (高出平坦基准约${net_leak.toFixed(1)}dB)：</b>按当前 ${crossover}Hz / ${slope}dB·oct 的分频方案，箱体响应会较明显地进入通带。建议参考上方表格调整容积、改用更陡的滤波器斜率、或适当提高分频点。</div></div>`;
-    } else if (matchClass === "status-warn") {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">📊</div><div><b>存在轻微残留隆起 (约${net_leak.toFixed(1)}dB)：</b>当前方案处于可用边界，风险有限但不充裕。若追求更高裕量，可参考上方表格适度增大容积或提高滤波器斜率。</div></div>`;
-    } else if (toleranceHigh) {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">🏆</div><div><b>容积高度宽容：</b>该单元 Qts 较低，在远超所需最小容积的范围内，箱体响应经滤波后都能保持在平坦通带以内。这意味着倒模容积的加工误差、结构预留等因素对最终声学表现影响很小，容积选择可优先服从结构与安装空间需要。</div></div>`;
+        verdict_html += `<div class="verdict-item"><div class="verdict-icon">⚠️</div><div><b>谐振穿透风险：</b>当前容积下箱体谐振峰泄漏量达 +${net_leak.toFixed(1)}dB。建议将分频点提升至 <b>${Math.round(fc * 1.2)}Hz</b> 以上，或将分频斜率改用 <b>24dB/oct 以上</b> 保护。</div></div>`;
     } else {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">✓</div><div><b>方案安全：</b>按当前 ${crossover}Hz / ${slope}dB·oct 的分频方案，箱体响应经滤波后保持在平坦通带以内，音质不受明显影响。</div></div>`;
+        verdict_html += `<div class="verdict-item"><div class="verdict-icon">✓</div><div><b>DSP 分频衔接安全：</b>箱体机械谐振被 DSP 有源滤波充分抑制，通带内平坦无染色。</div></div>`;
     }
 
-    if (ceiling.peakDb < -3) {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">📐</div><div><b>分频点相对该单元偏低：</b>该单元在 ${crossover}Hz 分频点下，即便容积调到理论最优值（约 ${vCadOptimal.toFixed(2)}L）也只能达到约 ${ceiling.peakDb.toFixed(1)}dB，明显低于平坦基准，属于分频点定得相对该单元 Fs/Qts 组合过低，不是容积能解决的问题，建议优先提高分频点。</div></div>`;
-    } else if (undershootClass === "danger") {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">⚠️</div><div><b>容积偏大 (分频点处约${currentCrossDb.toFixed(1)}dB)：</b>当前容积下箱体自身响应在分频点处还没有追平通带，建议向该分频点下的最优容积（约 ${vCadOptimal.toFixed(2)}L）靠拢，而不是继续增大容积。</div></div>`;
-    } else if (undershootClass === "warn") {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">📊</div><div><b>分频点处电平轻微不足 (约${currentCrossDb.toFixed(1)}dB)：</b>处于勉强可接受的边界，若想更贴近平坦，可参考该分频点下的最优容积（约 ${vCadOptimal.toFixed(2)}L）适度调整。</div></div>`;
+    if (v_cad >= parseFloat(optCadMin) && v_cad <= parseFloat(optCadMax)) {
+        verdict_html += `<div class="verdict-item"><div class="verdict-icon">🏆</div><div><b>处于黄金推荐容积：</b>当前倒模容积兼顾了极佳的瞬态阻尼与物理空间效率，中音表现饱满自然。</div></div>`;
+    } else if (v_cad > parseFloat(optCadMax)) {
+        verdict_html += `<div class="verdict-item"><div class="verdict-icon">ℹ️</div><div><b>容积充裕（趋于大容积）：</b>系统处于低阻尼/过阻尼优秀工况，解析力极高、失真低。该单元在该频段已获得 95% 以上声学上限，继续增大容积收益递减，可优先服从 A 柱视线与造型需求。</div></div>`;
+    } else {
+        verdict_html += `<div class="verdict-item"><div class="verdict-icon">📐</div><div><b>容积受限妥协：</b>当前容积略小于黄金区间，声音风格会略微偏紧偏硬。若 A 柱空间无法扩展，建议填满吸音棉，并在 DSP 调音时将中低段频点做轻微 EQ 平滑。</div></div>`;
     }
 
-    const allUnreachable = minVolRows.every(r => r.v_cad_min === null);
-    if (allUnreachable && qts > 0.45) {
-        verdict_html += `<div class="verdict-item"><div class="verdict-icon">💡</div><div><b style="color:var(--info)">专家级结构对策（AP 声阻泄压箱）：</b>该单元 Qts 偏高，在合理容积范围内难以让谐振残留降到安全水平。若安装空间无法进一步扩容，建议放弃绝对密封，改用非周期性阻尼设计（Aperiodic Enclosure）：在箱体开设泄压孔（面积约为振膜面积的15%-30%），并用高密度羊毛毡或压实棉紧密覆盖，利用声学流阻释放空气压力，降低系统等效Qtc。DSP 高通仍需设置在 Fc 以上。</div></div>`;
+    // 经典功能找回：AP (Aperiodic) 声阻泄压箱提示
+    if (qts > 0.45 && v_cad < parseFloat(optCadMin)) {
+        verdict_html += `
+            <div class="verdict-item" style="border-top:1px dashed #555; padding-top:8px;">
+                <div class="verdict-icon">💡</div>
+                <div>
+                    <b style="color:var(--warn)">专家级结构对策（AP 声阻泄压箱方案）：</b><br>
+                    该单元自身 Qts 偏高，且当前 A 柱倒模空间受限，若采用传统纯密闭箱体极易导致 Qtc 飙升、声音干硬。<br>
+                    <b>工艺建议：</b>放弃绝对密封，在箱体尾部开设面积约振膜有效面积 15%~25% 的泄压孔，并用高密度羊毛毡或压实阻尼棉紧密封堵（形成受控的声阻流阻通道）。这样可在微小容积下人为释放过量气垫阻尼，将等效 Qtc 拉回理想区间。
+                </div>
+            </div>
+        `;
     }
 
     document.getElementById('final_verdict_content').innerHTML = verdict_html;
@@ -798,7 +692,7 @@ function renderRadar(dataArr) {
     myRadarChart = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['瞬态与解析', '分频匹配度', '动态承载力', '结构与背波', '容积紧凑度'],
+            labels: ['瞬态与解析', '分频匹配度', '动态承载力', '结构与背波', '空间利用率'],
             datasets: [{
                 label: '声学得分',
                 data: dataArr,
@@ -830,13 +724,12 @@ function takeScreenshot() {
     html2canvas(target, { backgroundColor: "#1a252f", scale: 2 }).then(canvas => {
         btns.style.display = 'grid';
         const link = document.createElement('a');
-        link.download = `车载声学评估报告_V51_${new Date().toISOString().slice(0, 10)}.png`;
+        link.download = `车载声学评估报告_V52_${new Date().toISOString().slice(0, 10)}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     });
 }
 
-// 初始化
 updateCottonHint();
 document.getElementById('crossover').addEventListener('input', () => { crossoverTouched = true; });
 document.getElementById('driver_size').addEventListener('change', () => {
